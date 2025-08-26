@@ -365,11 +365,13 @@ class AgentCoreGatewayDeployer:
                     }
 
             # If we get here, the target wasn't found in the list
+            # nosemgrep logging-error-without-handling
             logger.error(
                 f"Lambda target '{target_name}' exists but couldn't be found in target list"
             )
             raise Exception(f"Target '{target_name}' not found")
 
+        # nosemgrep logging-error-without-handling
         except Exception as e:
             logger.error(f"Error retrieving existing Lambda target information: {e}")
             raise
