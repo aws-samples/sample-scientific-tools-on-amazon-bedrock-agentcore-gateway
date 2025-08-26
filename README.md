@@ -90,7 +90,7 @@ npx @modelcontextprotocol/inspector
 3. Select **Connect** to establish a connection to your gateway.
 4. Select **List Tools** to view all available tools provided by your gateway.
 5. Select the **protein-engineering-lambda__invoke_endpoint** tool.
-6. Enter an amino acid sequence in the sequence test field (e.g. `MALWMRLLPLLALLALWGPDPAAAFVNQHLCGSHLVEALYLVCGERGFFYTPKTRREAEDLQVGQVELGGGPGAGSLQPLALEGSLQKRGIVEQCCTSICSLYQLENYCN`) and select **Run Tool*. Take note of the **output_ud** value in the response message.
+6. Enter an amino acid sequence in the sequence test field (e.g. `FVNQHLCGSHLVEALYLVCGERGFFYTPKT`) and select **Run Tool**. Take note of the **output_id** value in the response message.
 7. Select the **protein-engineering-lambda___get_results** tool.
 8. Enter the **output_id** returned from step 6 in the output_id field and select **Run Tool**.
 9. Depending on your autoscaling configuration, it may take several minutes to provision an endpoint instance and process the request. In the meantime, the **get_results** tool will return a "Prediction is still in progress" message.
