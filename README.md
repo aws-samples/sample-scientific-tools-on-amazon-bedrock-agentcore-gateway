@@ -15,6 +15,10 @@ This CDK stack deploys a complete SageMaker async inference solution for the AMP
 - **Security**: IAM roles with least-privilege access
 - **Reliable Cleanup**: No more S3 deletion issues during stack destruction
 
+## Architecture
+
+![Protein Engineering Agent Architecture](img/protein-engineering-agent.png "Protein Engineering Agent Architecture")
+
 ## Quick Start
 
 ### Prerequisites
@@ -278,4 +282,4 @@ uv run cdk destroy --all
 
 ## License
 
-TBD
+MIT-0

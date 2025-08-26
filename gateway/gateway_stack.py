@@ -1,3 +1,6 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: MIT-0
+
 """
 CDK Stack for AgentCore Gateway IAM Role
 """
@@ -76,55 +79,6 @@ class AgentCoreGatewayStack(Stack):
                 resources=[lambda_function_arn],
             )
         )
-
-        # # Add Bedrock AgentCore permissions
-        # role.add_to_policy(
-        #     iam.PolicyStatement(
-        #         sid="BedrockAgentCorePermissions",
-        #         effect=iam.Effect.ALLOW,
-        #         actions=[
-        #             "bedrock-agentcore:*",
-        #             "bedrock:*",
-        #             "agent-credential-provider:*",
-        #             "iam:PassRole",
-        #             "secretsmanager:GetSecretValue",
-        #         ],
-        #         resources=["*"]
-        #     )
-        # )
-
-        # # Add CloudWatch Logs permissions
-        # role.add_to_policy(
-        #     iam.PolicyStatement(
-        #         sid="CloudWatchLogsPermissions",
-        #         effect=iam.Effect.ALLOW,
-        #         actions=[
-        #             "logs:CreateLogGroup",
-        #             "logs:CreateLogStream",
-        #             "logs:PutLogEvents",
-        #             "logs:DescribeLogGroups",
-        #             "logs:DescribeLogStreams",
-        #         ],
-        #         resources=[
-        #             f"arn:aws:logs:{cdk.Aws.REGION}:{cdk.Aws.ACCOUNT_ID}:log-group:/aws/bedrock-agentcore/gateways/*"
-        #         ]
-        #     )
-        # )
-
-        # # Add CloudWatch Metrics permissions
-        # role.add_to_policy(
-        #     iam.PolicyStatement(
-        #         sid="CloudWatchMetricsPermissions",
-        #         effect=iam.Effect.ALLOW,
-        #         actions=["cloudwatch:PutMetricData"],
-        #         resources=["*"],
-        #         conditions={
-        #             "StringEquals": {
-        #                 "cloudwatch:namespace": "bedrock-agentcore"
-        #             }
-        #         }
-        #     )
-        # )
 
         # Add tags
         cdk.Tags.of(role).add("Service", "bedrock-agentcore")
