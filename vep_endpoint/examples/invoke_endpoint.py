@@ -135,6 +135,7 @@ class SageMakerAsyncClient:
                 logger.debug(
                     f"Results not ready yet, waiting {poll_interval} seconds..."
                 )
+                # nosemgrep arbitrary-sleep
                 time.sleep(poll_interval)
                 continue
 
