@@ -371,8 +371,9 @@ class AgentCoreGatewayDeployer:
             )
             raise Exception(f"Target '{target_name}' not found")
 
-        # nosemgrep logging-error-without-handling
+        
         except Exception as e:
+            # nosemgrep logging-error-without-handling
             logger.error(f"Error retrieving existing Lambda target information: {e}")
             raise
 

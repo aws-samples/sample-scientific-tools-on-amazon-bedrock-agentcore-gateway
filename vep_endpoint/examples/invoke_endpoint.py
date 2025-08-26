@@ -72,8 +72,9 @@ class SageMakerAsyncClient:
             logger.info(f"Input data uploaded to: {s3_uri}")
             return s3_uri
 
-        # nosemgrep logging-error-without-handling
+        
         except Exception as e:
+            # nosemgrep logging-error-without-handling
             logger.error(f"Failed to upload input data: {e}")
             raise
 
@@ -100,8 +101,9 @@ class SageMakerAsyncClient:
             )
             return output_location
 
-        # nosemgrep logging-error-without-handling
+        
         except Exception as e:
+            # nosemgrep logging-error-without-handling
             logger.error(f"Failed to invoke async endpoint: {e}")
             raise
 
