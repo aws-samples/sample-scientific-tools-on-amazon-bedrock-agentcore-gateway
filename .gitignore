@@ -1,0 +1,18 @@
+*.swp
+package-lock.json
+__pycache__
+.pytest_cache
+.venv
+*.egg-info
+
+# CDK asset staging directory
+.cdk.staging
+cdk.out
+
+# Other
+.DS_Store
+.kiro
+inference_code.tar.gz
+.coverage
+gateway-deployment.json
+htmlcov

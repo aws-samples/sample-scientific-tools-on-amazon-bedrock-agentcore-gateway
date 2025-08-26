@@ -1,0 +1,5 @@
+# Lambda function dependencies
+# Note: boto3 and botocore are provided by the Lambda runtime environment
+
+# Additional dependencies for Lambda function
+# (Currently none required beyond boto3/botocore provided by runtime)

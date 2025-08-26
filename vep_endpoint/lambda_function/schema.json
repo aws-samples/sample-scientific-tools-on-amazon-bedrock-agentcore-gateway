@@ -1,0 +1,43 @@
+{
+    "mcp": {
+        "lambda": {
+            "lambdaArn": "<PLACEHOLDER>",
+            "toolSchema": {
+                "inlinePayload": [
+                    {
+                        "name": "invoke_endpoint",
+                        "description": "Submit a job to predict the variant effects for an amino acid sequence",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "sequence": {
+                                    "type": "string",
+                                    "description": "Amino acid sequence"
+                                }
+                            },
+                            "required": [
+                                "sequence"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "get_results",
+                        "description": "Check if a variant effect prediction job has completed and, if so, retrieve the results. ",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "output_id": {
+                                    "type": "string",
+                                    "description": "output_id returned by the invoke_endpoint request"
+                                }
+                            },
+                            "required": [
+                                "output_id"
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    }
+}

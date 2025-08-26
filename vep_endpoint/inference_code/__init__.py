@@ -1,0 +1,1 @@
+# Inference code for SageMaker async endpoint
