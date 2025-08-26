@@ -1,5 +1,8 @@
 # Connect Drug Discovery Agents to Scientific Tools with Amazon Bedrock AgentCore Gateway
 
+> [!IMPORTANT]
+> The examples provided in this repository are for experimental and educational purposes only. They demonstrate concepts and techniques but are not intended for direct use in production environments.
+
 AI agents are revolutionizing drug discovery by enabling researchers to rapidly analyze biological data and generate potential drug candidates. However, integrating complex scientific tools into scalable agent workflows remains a challenge. Traditional approaches require extensive custom integration work and struggle to handle the computational demands of biomolecular analysis at scale. This project demonstrates how Amazon Bedrock AgentCore Gateway can seamlessly connect AI agents to specialized protein engineering tools hosted on Amazon SageMaker AI and elsewhere through the Model Context Protocol (MCP).
 
 ## Overview
