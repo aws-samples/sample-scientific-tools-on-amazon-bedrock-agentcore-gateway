@@ -16,7 +16,7 @@ import logging
 from typing import Dict, Any, Optional
 from urllib.parse import urlparse
 import argparse
-
+import sys
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -197,7 +197,7 @@ def main():
 
     # Prepare input data
     if args.input_file:
-        with open(args.input_file, "r") as f:
+        with open(args.input_file, "r", encoding="utf-8") as f:
             input_data = json.load(f)
     else:
         input_data = create_sample_input()
@@ -222,4 +222,4 @@ def main():
 
 
 if __name__ == "__main__":
-    exit(main())
+    sys.exit(main())

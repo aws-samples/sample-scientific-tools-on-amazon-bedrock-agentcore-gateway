@@ -54,6 +54,7 @@ def invoke_endpoint(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         # Validate event structure
         structure_validation = validate_event_structure(event, ["sequence"])
+        # nosemgrep is-function-without-parentheses
         if not structure_validation.is_valid:
             put_simple_metric("ValidationError", 1)
             return create_validation_error_response(
@@ -63,6 +64,7 @@ def invoke_endpoint(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Extract and validate amino acid sequence
         raw_sequence = event.get("sequence", "")
         sequence_validation = validate_amino_acid_sequence(raw_sequence)
+        # nosemgrep is-function-without-parentheses
         if not sequence_validation.is_valid:
             put_simple_metric("ValidationError", 1)
             return create_validation_error_response(

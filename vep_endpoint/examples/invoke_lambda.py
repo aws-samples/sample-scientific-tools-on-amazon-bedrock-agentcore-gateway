@@ -4,6 +4,7 @@ import base64
 import time
 import argparse
 from datetime import datetime
+import sys
 
 lambda_client = boto3.client("lambda")
 
@@ -279,4 +280,4 @@ def main():
 if __name__ == "__main__":
     exit_code = main()
     if exit_code:
-        exit(exit_code)
+        sys.exit(exit_code)

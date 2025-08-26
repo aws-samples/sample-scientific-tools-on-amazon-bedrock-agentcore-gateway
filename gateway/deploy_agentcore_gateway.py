@@ -126,7 +126,9 @@ class AgentCoreGatewayDeployer:
 
     def get_agentcore_gateway_role_arn(self) -> str:
         """Retrieve IAM role ARN from SSM Parameter Store (created by CDK stack)."""
-        logger.info("Retrieving AgentCore Gateway IAM role ARN from SSM Parameter Store...")
+        logger.info(
+            "Retrieving AgentCore Gateway IAM role ARN from SSM Parameter Store..."
+        )
 
         try:
             # Get role ARN from SSM Parameter Store
@@ -152,7 +154,11 @@ class AgentCoreGatewayDeployer:
             sys.exit(1)
 
     def create_gateway(
-        self, gateway_name: str, role_arn: str, cognito_config: Dict[str, str], use_existing: bool = False
+        self,
+        gateway_name: str,
+        role_arn: str,
+        cognito_config: Dict[str, str],
+        use_existing: bool = False,
     ) -> Dict[str, Any]:
         """Create the AgentCore Gateway with Cognito JWT authorization."""
         logger.info(f"Creating AgentCore Gateway: {gateway_name}")
@@ -198,10 +204,14 @@ class AgentCoreGatewayDeployer:
             error_code = e.response["Error"]["Code"]
             if error_code == "ConflictException":
                 if use_existing:
-                    logger.info(f"Gateway '{gateway_name}' already exists, using existing gateway")
+                    logger.info(
+                        f"Gateway '{gateway_name}' already exists, using existing gateway"
+                    )
                     return self._get_existing_gateway(gateway_name)
                 else:
-                    logger.error(f"Gateway with name '{gateway_name}' already exists. Use --use-existing to use the existing gateway.")
+                    logger.error(
+                        f"Gateway with name '{gateway_name}' already exists. Use --use-existing to use the existing gateway."
+                    )
             elif error_code == "ValidationException":
                 logger.error(f"Invalid gateway configuration: {e}")
             else:
@@ -216,30 +226,36 @@ class AgentCoreGatewayDeployer:
         try:
             # List gateways to find the one with matching name
             response = self.agentcore_client.list_gateways()
-            
-            for gateway in response.get('items', []):
-                if gateway['name'] == gateway_name:
-                    gateway_id = gateway['gatewayId']
-                    
+
+            for gateway in response.get("items", []):
+                if gateway["name"] == gateway_name:
+                    gateway_id = gateway["gatewayId"]
+
                     # Get detailed gateway information to get the URL
-                    gateway_details = self.agentcore_client.get_gateway(gatewayIdentifier=gateway_id)
-                    gateway_url = gateway_details['gatewayUrl']
-                    
+                    gateway_details = self.agentcore_client.get_gateway(
+                        gatewayIdentifier=gateway_id
+                    )
+                    gateway_url = gateway_details["gatewayUrl"]
+
                     logger.info(f"Found existing gateway:")
                     logger.info(f"  Gateway ID: {gateway_id}")
                     logger.info(f"  Gateway URL: {gateway_url}")
-                    
+
                     return {
                         "gateway_id": gateway_id,
                         "gateway_url": gateway_url,
                         "response": gateway_details,
                     }
-            
+
             # If we get here, the gateway wasn't found in the list
-            logger.error(f"Gateway '{gateway_name}' exists but couldn't be found in gateway list")
-            logger.error(f"Available gateways: {[g['name'] for g in response.get('items', [])]}")
+            logger.error(
+                f"Gateway '{gateway_name}' exists but couldn't be found in gateway list"
+            )
+            logger.error(
+                f"Available gateways: {[g['name'] for g in response.get('items', [])]}"
+            )
             sys.exit(1)
-            
+
         except Exception as e:
             logger.error(f"Error retrieving existing gateway information: {e}")
             sys.exit(1)
@@ -267,7 +283,7 @@ class AgentCoreGatewayDeployer:
                 "scope": "agentcore-gateway-id/gateway:read agentcore-gateway-id/gateway:write",
             }
 
-            response = requests.post(token_url, headers=headers, data=data)
+            response = requests.post(token_url, headers=headers, data=data, timeout=5)
             response.raise_for_status()
 
             token_data = response.json()
@@ -287,14 +303,16 @@ class AgentCoreGatewayDeployer:
 
     def get_lambda_function_arn(self) -> Optional[str]:
         """Get Lambda function ARN from Systems Manager Parameter Store."""
-        logger.info("Retrieving Lambda function ARN from Systems Manager Parameter Store...")
-        
+        logger.info(
+            "Retrieving Lambda function ARN from Systems Manager Parameter Store..."
+        )
+
         # Try different possible parameter names
         possible_parameter_names = [
             f"/protein-agent/lambda-function-arn",
             f"/sagemaker-async/lambda-function-arn",
         ]
-        
+
         for param_name in possible_parameter_names:
             try:
                 logger.info(f"Checking parameter: {param_name}")
@@ -302,9 +320,9 @@ class AgentCoreGatewayDeployer:
                 lambda_arn = response["Parameter"]["Value"]
                 logger.info(f"Found Lambda function ARN: {lambda_arn}")
                 return lambda_arn
-                            
+
             except ClientError as e:
-                if e.response['Error']['Code'] == 'ParameterNotFound':
+                if e.response["Error"]["Code"] == "ParameterNotFound":
                     logger.debug(f"Parameter {param_name} not found, trying next...")
                     continue
                 else:
@@ -313,35 +331,45 @@ class AgentCoreGatewayDeployer:
             except Exception as e:
                 logger.warning(f"Unexpected error checking parameter {param_name}: {e}")
                 continue
-        
-        logger.warning("Could not find Lambda function ARN in Systems Manager Parameter Store")
-        logger.info("Make sure the SageMaker async inference stack is deployed with the updated CDK template")
+
+        logger.warning(
+            "Could not find Lambda function ARN in Systems Manager Parameter Store"
+        )
+        logger.info(
+            "Make sure the SageMaker async inference stack is deployed with the updated CDK template"
+        )
         return None
 
-    def _get_existing_lambda_target(self, gateway_id: str, target_name: str, lambda_arn: str) -> Dict[str, Any]:
+    def _get_existing_lambda_target(
+        self, gateway_id: str, target_name: str, lambda_arn: str
+    ) -> Dict[str, Any]:
         """Get information about an existing Lambda target."""
         try:
             # List gateway targets to find the one with matching name
-            response = self.agentcore_client.list_gateway_targets(gatewayIdentifier=gateway_id)
-            
-            for target in response.get('items', []):
-                if target['name'] == target_name:
-                    target_id = target['targetId']
-                    
+            response = self.agentcore_client.list_gateway_targets(
+                gatewayIdentifier=gateway_id
+            )
+
+            for target in response.get("items", []):
+                if target["name"] == target_name:
+                    target_id = target["targetId"]
+
                     logger.info(f"Found existing Lambda target:")
                     logger.info(f"  Target ID: {target_id}")
                     logger.info(f"  Lambda ARN: {lambda_arn}")
-                    
+
                     return {
-                        'target_id': target_id,
-                        'lambda_arn': lambda_arn,
-                        'response': target
+                        "target_id": target_id,
+                        "lambda_arn": lambda_arn,
+                        "response": target,
                     }
-            
+
             # If we get here, the target wasn't found in the list
-            logger.error(f"Lambda target '{target_name}' exists but couldn't be found in target list")
+            logger.error(
+                f"Lambda target '{target_name}' exists but couldn't be found in target list"
+            )
             raise Exception(f"Target '{target_name}' not found")
-            
+
         except Exception as e:
             logger.error(f"Error retrieving existing Lambda target information: {e}")
             raise
@@ -349,7 +377,7 @@ class AgentCoreGatewayDeployer:
     def create_lambda_target(self, gateway_id: str, lambda_arn: str) -> Dict[str, Any]:
         """Create a Lambda target for the AgentCore Gateway."""
         logger.info(f"Creating Lambda target for gateway {gateway_id}")
-        
+
         # Define the tool schema for the protein engineering Lambda function
         tool_schema = {
             "inlinePayload": [
@@ -361,11 +389,11 @@ class AgentCoreGatewayDeployer:
                         "properties": {
                             "sequence": {
                                 "type": "string",
-                                "description": "Amino acid sequence"
+                                "description": "Amino acid sequence",
                             }
                         },
-                        "required": ["sequence"]
-                    }
+                        "required": ["sequence"],
+                    },
                 },
                 {
                     "name": "get_results",
@@ -375,15 +403,15 @@ class AgentCoreGatewayDeployer:
                         "properties": {
                             "output_id": {
                                 "type": "string",
-                                "description": "output_id returned by the invoke_endpoint request"
+                                "description": "output_id returned by the invoke_endpoint request",
                             }
                         },
-                        "required": ["output_id"]
-                    }
-                }
+                        "required": ["output_id"],
+                    },
+                },
             ]
         }
-        
+
         try:
             # Create the Lambda target
             response = self.agentcore_client.create_gateway_target(
@@ -392,35 +420,34 @@ class AgentCoreGatewayDeployer:
                 description="Lambda function for protein variant effect prediction",
                 targetConfiguration={
                     "mcp": {
-                        "lambda": {
-                            "lambdaArn": lambda_arn,
-                            "toolSchema": tool_schema
-                        }
+                        "lambda": {"lambdaArn": lambda_arn, "toolSchema": tool_schema}
                     }
                 },
                 credentialProviderConfigurations=[
-                    {
-                        "credentialProviderType": "GATEWAY_IAM_ROLE"
-                    }
-                ]
+                    {"credentialProviderType": "GATEWAY_IAM_ROLE"}
+                ],
             )
-            
-            target_id = response['targetId']
+
+            target_id = response["targetId"]
             logger.info(f"Successfully created Lambda target: {target_id}")
-            
+
             return {
-                'target_id': target_id,
-                'lambda_arn': lambda_arn,
-                'response': response
+                "target_id": target_id,
+                "lambda_arn": lambda_arn,
+                "response": response,
             }
-            
+
         except ClientError as e:
-            error_code = e.response['Error']['Code']
-            if error_code == 'ConflictException':
-                logger.info(f"Lambda target 'protein-engineering-lambda' already exists for gateway '{gateway_id}', using existing target")
+            error_code = e.response["Error"]["Code"]
+            if error_code == "ConflictException":
+                logger.info(
+                    f"Lambda target 'protein-engineering-lambda' already exists for gateway '{gateway_id}', using existing target"
+                )
                 # Get existing target information
-                return self._get_existing_lambda_target(gateway_id, "protein-engineering-lambda", lambda_arn)
-            elif error_code == 'ValidationException':
+                return self._get_existing_lambda_target(
+                    gateway_id, "protein-engineering-lambda", lambda_arn
+                )
+            elif error_code == "ValidationException":
                 logger.error(f"Invalid target configuration: {e}")
             else:
                 logger.error(f"AWS error creating Lambda target: {e}")
@@ -440,20 +467,28 @@ class AgentCoreGatewayDeployer:
         role_arn = self.get_agentcore_gateway_role_arn()
 
         # Step 3: Create gateway
-        gateway_info = self.create_gateway(gateway_name, role_arn, cognito_config, use_existing)
+        gateway_info = self.create_gateway(
+            gateway_name, role_arn, cognito_config, use_existing
+        )
 
         # Step 4: Create Lambda target (if Lambda function is available)
         lambda_target_info = None
         lambda_arn = self.get_lambda_function_arn()
         if lambda_arn:
             try:
-                lambda_target_info = self.create_lambda_target(gateway_info['gateway_id'], lambda_arn)
+                lambda_target_info = self.create_lambda_target(
+                    gateway_info["gateway_id"], lambda_arn
+                )
                 logger.info("Lambda target created successfully")
             except Exception as e:
-                logger.warning(f"Failed to create Lambda target (gateway still functional): {e}")
+                logger.warning(
+                    f"Failed to create Lambda target (gateway still functional): {e}"
+                )
         else:
-            logger.warning("Lambda function ARN not found - gateway created without Lambda target")
-        
+            logger.warning(
+                "Lambda function ARN not found - gateway created without Lambda target"
+            )
+
         # Step 5: Get access token for testing (optional)
         access_token = self.get_access_token(cognito_config)
 
@@ -493,8 +528,8 @@ class AgentCoreGatewayDeployer:
         print(f"User Pool ID:    {result['cognito_config']['user_pool_id']}")
         print(f"Discovery URL:   {result['cognito_config']['discovery_url']}")
         print()
-        
-        if result.get('lambda_target'):
+
+        if result.get("lambda_target"):
             print("🔧 LAMBDA TARGET")
             print("-" * 40)
             print(f"Target ID:       {result['lambda_target']['target_id']}")
@@ -515,7 +550,7 @@ class AgentCoreGatewayDeployer:
 
         print("📝 NEXT STEPS")
         print("-" * 40)
-        if result.get('lambda_target'):
+        if result.get("lambda_target"):
             print("1. Test the gateway endpoint with the provided access token")
             print("2. Configure your MCP client to use the gateway URL")
             print("3. Try the available tools: invoke_endpoint, get_results")
@@ -541,7 +576,7 @@ class AgentCoreGatewayDeployer:
             f"aws bedrock-agentcore-control get-gateway --gateway-id {result['gateway_id']} --region {result['region']}"
         )
         print()
-        if result.get('lambda_target'):
+        if result.get("lambda_target"):
             print(f"# List gateway targets")
             print(
                 f"aws bedrock-agentcore-control list-gateway-targets --gateway-id {result['gateway_id']} --region {result['region']}"
@@ -573,7 +608,6 @@ Examples:
         """,
     )
 
-
     parser.add_argument(
         "--gateway-name",
         "-n",
@@ -591,11 +625,11 @@ Examples:
     parser.add_argument(
         "--verbose", "-v", action="store_true", help="Enable verbose logging"
     )
-    
+
     parser.add_argument(
         "--use-existing",
         action="store_true",
-        help="Use existing gateway if it exists instead of creating a new one"
+        help="Use existing gateway if it exists instead of creating a new one",
     )
 
     args = parser.parse_args()
@@ -609,9 +643,7 @@ Examples:
 
     try:
         # Initialize deployer
-        deployer = AgentCoreGatewayDeployer(
-            region=args.region
-        )
+        deployer = AgentCoreGatewayDeployer(region=args.region)
 
         # Deploy gateway
         result = deployer.deploy(gateway_name, args.use_existing)
@@ -624,13 +656,17 @@ Examples:
             "role_arn": result["role_arn"],
             "region": result["region"],
             "cognito_config": result["cognito_config"],
-            "lambda_target": {
-                "target_id": result["lambda_target"]["target_id"],
-                "lambda_arn": result["lambda_target"]["lambda_arn"]
-            } if result.get("lambda_target") else None,
+            "lambda_target": (
+                {
+                    "target_id": result["lambda_target"]["target_id"],
+                    "lambda_arn": result["lambda_target"]["lambda_arn"],
+                }
+                if result.get("lambda_target")
+                else None
+            ),
             "access_token": result.get("access_token"),
         }
-        with open(output_file, "w") as f:
+        with open(output_file, "w", encoding="utf-8") as f:
             json.dump(serializable_result, f, indent=2)
 
         logger.info(f"Deployment information saved to: {output_file}")

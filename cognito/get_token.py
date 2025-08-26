@@ -11,17 +11,11 @@ def get_access_token_from_aws() -> str:
     secrets = boto3.client("secretsmanager")
 
     # Get configuration from AWS
-    client_id = ssm.get_parameter(Name=f"/cognito/client-id")[
-        "Parameter"
-    ]["Value"]
-    domain = ssm.get_parameter(Name=f"/cognito/domain")["Parameter"][
-        "Value"
-    ]
+    client_id = ssm.get_parameter(Name=f"/cognito/client-id")["Parameter"]["Value"]
+    domain = ssm.get_parameter(Name=f"/cognito/domain")["Parameter"]["Value"]
 
     # Get client secret (now stored as JSON)
-    secret_response = secrets.get_secret_value(
-        SecretId=f"cognito-client-secret"
-    )
+    secret_response = secrets.get_secret_value(SecretId=f"cognito-client-secret")
     secret_data = json.loads(secret_response["SecretString"])
     client_secret = secret_data["client_secret"]
 
@@ -39,7 +33,7 @@ def get_access_token_from_aws() -> str:
         "scope": scopes,
     }
 
-    response = requests.post(url, headers=headers, data=data)
+    response = requests.post(url, headers=headers, data=data, timeout=5)
     response.raise_for_status()
 
     return response.json()["access_token"]
