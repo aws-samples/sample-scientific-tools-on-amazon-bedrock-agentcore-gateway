@@ -361,10 +361,40 @@ class CognitoStack(Stack):
 import json
 import boto3
 import logging
+import urllib3
 from typing import Dict, Any
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+def send_response(event, context, response_status, response_data=None, physical_resource_id=None, reason=None):
+    """Send response to CloudFormation."""
+    response_data = response_data or {}
+    
+    response_body = {
+        'Status': response_status,
+        'Reason': reason or f"See CloudWatch Log Stream: {context.log_stream_name}",
+        'PhysicalResourceId': physical_resource_id or context.log_stream_name,
+        'StackId': event['StackId'],
+        'RequestId': event['RequestId'],
+        'LogicalResourceId': event['LogicalResourceId'],
+        'Data': response_data
+    }
+    
+    logger.info(f"Response body: {json.dumps(response_body)}")
+    
+    try:
+        http = urllib3.PoolManager()
+        response = http.request(
+            'PUT',
+            event['ResponseURL'],
+            body=json.dumps(response_body).encode('utf-8'),
+            headers={'Content-Type': 'application/json'}
+        )
+        logger.info(f"CloudFormation response status: {response.status}")
+    except Exception as e:
+        logger.error(f"Failed to send response to CloudFormation: {str(e)}")
+        raise e
 
 def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     """
@@ -372,18 +402,20 @@ def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
     """
     logger.info(f"Event: {json.dumps(event, default=str)}")
     
-    request_type = event['RequestType']
-    properties = event['ResourceProperties']
-    
-    user_pool_id = properties['UserPoolId']
-    client_id = properties['ClientId']
-    secret_name = properties['SecretName']
-    region = properties['Region']
-    
-    cognito = boto3.client('cognito-idp', region_name=region)
-    secrets = boto3.client('secretsmanager', region_name=region)
-    
     try:
+        request_type = event['RequestType']
+        properties = event['ResourceProperties']
+        
+        user_pool_id = properties['UserPoolId']
+        client_id = properties['ClientId']
+        secret_name = properties['SecretName']
+        region = properties['Region']
+        
+        cognito = boto3.client('cognito-idp', region_name=region)
+        secrets = boto3.client('secretsmanager', region_name=region)
+        
+        physical_resource_id = f"{secret_name}-{client_id}"
+        
         if request_type in ['Create', 'Update']:
             # Get the client secret from Cognito
             logger.info(f"Retrieving client secret for client {client_id}")
@@ -426,13 +458,12 @@ def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
                 )
                 logger.info(f"Successfully updated secret {secret_name}")
             
-            return {
-                'PhysicalResourceId': f"{secret_name}-{client_id}",
-                'Data': {
-                    'SecretName': secret_name,
-                    'SecretArn': f"arn:aws:secretsmanager:{region}:{context.invoked_function_arn.split(':')[4]}:secret:{secret_name}"
-                }
+            response_data = {
+                'SecretName': secret_name,
+                'SecretArn': f"arn:aws:secretsmanager:{region}:{context.invoked_function_arn.split(':')[4]}:secret:{secret_name}"
             }
+            
+            send_response(event, context, 'SUCCESS', response_data, physical_resource_id)
             
         elif request_type == 'Delete':
             # Optionally delete the secret (commented out to preserve data)
@@ -444,12 +475,11 @@ def handler(event: Dict[str, Any], context) -> Dict[str, Any]:
             #     logger.info(f"Secret {secret_name} not found, nothing to delete")
             
             logger.info(f"Skipping deletion of secret {secret_name} to preserve data")
-            return {
-                'PhysicalResourceId': f"{secret_name}-{client_id}"
-            }
+            send_response(event, context, 'SUCCESS', {}, physical_resource_id)
     
     except Exception as e:
         logger.error(f"Error: {str(e)}")
+        send_response(event, context, 'FAILED', {}, None, str(e))
         raise e
 '''
     

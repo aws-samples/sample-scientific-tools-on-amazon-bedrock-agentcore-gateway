@@ -133,6 +133,9 @@ gateway_stack = AgentCoreGatewayStack(
     env=cdk.Environment(account=app.account, region=app.region),
 )
 
+# Add explicit dependency to ensure VEP stack deploys first
+gateway_stack.add_dependency(sagemaker_stack)
+
 # Apply CDK Nag security checks
 cdk.Aspects.of(app).add(AwsSolutionsChecks(verbose=True))
 
