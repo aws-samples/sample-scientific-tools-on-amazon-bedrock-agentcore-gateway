@@ -10,6 +10,8 @@ This script deploys an Amazon Bedrock AgentCore Gateway using boto3.
 It retrieves configuration from Systems Manager Parameter Store and Secrets Manager,
 creates the necessary IAM role, and sets up the gateway with Cognito JWT authorization.
 
+Note: This script will no longer be necessary once AgentCore receives CloudFormation/CDK support.
+
 Prerequisites:
 - AWS CLI configured with appropriate permissions
 - AgentCore Gateway IAM role stack deployed (provides IAM role ARN)

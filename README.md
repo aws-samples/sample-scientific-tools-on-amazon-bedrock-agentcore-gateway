@@ -62,13 +62,13 @@ uv run cdk deploy --all
 2. Create Bedrock AgentCore Gateway
 
 ```bash
-uv run gateway/deploy_agentcore_gateway.py
+uv run deploy_agentcore.py
 ```
 
 3. Get Token
 
 ```bash
-uv run uv run cognito/get_token.py 
+uv run uv run get_token.py 
 ```
 
 ### Test with MCP Inspector

@@ -8,7 +8,9 @@ dependencies = [
     "aws-cdk-lib==2.208.0",
     "cdk-nag>=2.37.9",
     "constructs>=10.0.0,<11.0.0",
+    "matplotlib>=3.10.5",
     "mcp>=1.13.0",
+    "pandas>=2.3.2",
     "strands-agents>=1.5.0",
 ]
 
