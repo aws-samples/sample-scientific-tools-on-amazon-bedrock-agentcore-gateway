@@ -38,6 +38,8 @@ import sys
 from typing import Dict, Any, Optional
 from botocore.exceptions import ClientError, NoCredentialsError
 
+from get_token import get_access_token_from_aws
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -606,14 +608,14 @@ def main():
         description="Deploy Amazon Bedrock AgentCore Gateway",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  # First deploy the IAM role stack
-  cd gateway && cdk deploy AgentCoreGatewayRole
-  
-  # Then deploy the gateway
-  python deploy_agentcore_gateway.py                                    # Deploy with defaults
-  python deploy_agentcore_gateway.py --gateway-name my-custom-gateway   # Custom gateway name
-  python deploy_agentcore_gateway.py --gateway-name test-gw --region us-west-2
+        Examples:
+        # First deploy the IAM role stack
+        cd gateway && cdk deploy AgentCoreGatewayRole
+        
+        # Then deploy the gateway
+        python deploy_agentcore.py                                    # Deploy with defaults
+        python deploy_agentcore.py --gateway-name my-custom-gateway   # Custom gateway name
+        python deploy_agentcore.py --gateway-name test-gw --region us-west-2
         """,
     )
 
@@ -657,6 +659,9 @@ Examples:
         # Deploy gateway
         result = deployer.deploy(gateway_name, args.use_existing)
 
+        # Get bearer token for immediate testing
+        token = get_access_token_from_aws()
+
         # Save deployment info to file (excluding non-serializable response objects)
         output_file = f"gateway-deployment.json"
         serializable_result = {
@@ -672,13 +677,15 @@ Examples:
                 }
                 if result.get("lambda_target")
                 else None
-            ),
-            "access_token": result.get("access_token"),
+            )
         }
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(serializable_result, f, indent=2)
 
         logger.info(f"Deployment information saved to: {output_file}")
+        print("\n##################\nConnection Info\n##################\n")
+        print(f"AgentCore Gateway URL:\n{result['gateway_url']}\n")
+        print(f"Bearer Token:\n{token}")
 
     except KeyboardInterrupt:
         logger.info("Deployment cancelled by user")

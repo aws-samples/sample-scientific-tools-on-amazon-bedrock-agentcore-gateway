@@ -237,25 +237,8 @@ uv run cdk deploy VEPEndpointStack \
 
 ### Delete Gateway
 
-Before you destroy the stack, first delete your gateway targets and gateway.
-
-1. Find `gatewayId` value for your gateway
-
 ```bash
-export GATEWAY_ID=$(aws bedrock-agentcore-control list-gateways --query 'items[].gatewayId' --output text)
-```
-
-2. Recursively delete all associated gateway targets
-
-```bash
-aws bedrock-agentcore-control list-gateway-targets --gateway-identifier "$GATEWAY_ID" --query 'items[].targetId' --output text \
-| xargs -I {} aws bedrock-agentcore-control delete-gateway-target --gateway-identifier "$GATEWAY_ID" --target-id {}
-```
-
-3. Delete gateway
-
-```bash
-aws bedrock-agentcore-control delete-gateway --gateway-identifier "$GATEWAY_ID"
+uv run delete_agentcore.py
 ```
 
 ### Destroy Stack
