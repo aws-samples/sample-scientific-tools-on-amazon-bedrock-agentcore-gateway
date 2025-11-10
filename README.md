@@ -68,7 +68,7 @@ uv run deploy_agentcore.py
 3. Get Token
 
 ```bash
-uv run uv run get_token.py 
+uv run get_token.py 
 ```
 
 ### Test with MCP Inspector
