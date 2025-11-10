@@ -22,4 +22,5 @@ inference_code.tar.gz
 gateway-deployment.json
 htmlcov
 
-cdk.out
+# CloudFormation outputs
+*.out

@@ -1,6 +1,6 @@
-# VEP Endpoint Stack - SageMaker Async Inference for Protein Variant Effect Prediction
+# VEP Endpoint - SageMaker Async Inference for Protein Variant Effect Prediction
 
-This CDK stack provides Infrastructure as Code for deploying SageMaker asynchronous inference endpoints specifically designed for the AMPLIFY protein variant effect prediction model. The stack includes comprehensive resource management, autoscaling, monitoring, and Lambda integration for seamless protein engineering workflows.
+This directory contains the Lambda function code and SageMaker inference code for deploying asynchronous inference endpoints specifically designed for the AMPLIFY protein variant effect prediction model. The infrastructure is deployed using CloudFormation templates (see `cloudformation/` directory).
 
 ## Overview
 
@@ -39,65 +39,26 @@ The stack accepts the following parameters that can be configured at deployment 
 | `MaxCapacity` | Number | `2` | Maximum number of instances for auto scaling |
 | `MaxConcurrentInvocations` | Number | `4` | Maximum concurrent invocations per instance |
 
-### Configuration Methods
+### Configuration
 
-#### 1. Default Configuration
-
-Deploy with all default settings:
-
-```python
-import aws_cdk as cdk
-from vep_endpoint.vep_endpoint_stack import VEPEndpointStack
-
-app = cdk.App()
-VEPEndpointStack(app, "VEPEndpointStack")
-app.synth()
-```
-
-#### 2. Custom Configuration Object
-
-Use a configuration object for programmatic control:
-
-```python
-from vep_endpoint.vep_endpoint_stack import VEPEndpointConfig, VEPEndpointStack
-
-custom_config = VEPEndpointConfig(
-    instance_type="ml.g6.4xlarge",
-    model_id="chandar-lab/AMPLIFY_350M",
-    s3_bucket_name="my-protein-analysis-bucket",
-    min_capacity=1,
-    max_capacity=5,
-    max_concurrent_invocations=8,
-    enable_autoscaling=True
-)
-
-app = cdk.App()
-VEPEndpointStack(app, "VEPEndpointStackCustom", config=custom_config)
-app.synth()
-```
-
-#### 3. Parameter Overrides at Deployment
-
-Override parameters at deployment time:
+Configuration is managed through CloudFormation parameters. Edit `cloudformation/parameters/vep-parameters.json` or pass parameters to the deployment script:
 
 ```bash
-uv run cdk deploy --parameters InstanceType=ml.g6.8xlarge --parameters MaxCapacity=8
-```
-
-#### 4. Context-Based Configuration
-
-Use CDK context for environment-specific deployments:
-
-```bash
-uv run cdk deploy --context project_name=my-protein-project
+# Deploy with custom parameters
+cd cloudformation/scripts
+./deploy.sh \
+  --instance-type ml.g6.4xlarge \
+  --min-capacity 1 \
+  --max-capacity 5 \
+  --enable-autoscaling
 ```
 
 ### Resource Naming Convention
 
 All resources follow a consistent naming pattern:
 
-- **Resource Prefix**: `{project_name}-{timestamp}`
-- **S3 Bucket**: Auto-generated with CDK naming for uniqueness
+- **Resource Prefix**: `{project_name}-`
+- **S3 Bucket**: `{project_name}-async-inference-{account_id}`
 - **Model**: `amplify-vep-model`
 - **Endpoint Config**: `amplify-vep-config`
 - **Endpoint**: `amplify-vep-endpoint`
@@ -105,48 +66,17 @@ All resources follow a consistent naming pattern:
 
 ## Deployment
 
-### Prerequisites
+The VEP endpoint is deployed using CloudFormation templates. See the main project README and `cloudformation/README.md` for deployment instructions.
 
-- AWS CLI configured with appropriate permissions
-- Python 3.9+ with uv package manager
-- Node.js 18+ and npm for CDK CLI
-- AWS CDK CLI: `npm install -g aws-cdk`
-
-### Basic Deployment
+### Quick Start
 
 ```bash
-# Install dependencies
-uv sync
+# Deploy all infrastructure
+cd cloudformation/scripts
+./deploy.sh --region us-east-1
 
-# Bootstrap CDK (first time only)
-uv run cdk bootstrap
-
-# Deploy the stack
-uv run cdk deploy VEPEndpointStack
-
-# View stack outputs
-uv run cdk deploy VEPEndpointStack --outputs-file outputs.json
-```
-
-### Development Deployment
-
-```bash
-# Deploy with development settings
-uv run cdk deploy VEPEndpointStack \
-  --parameters MinCapacity=0 \
-  --parameters MaxCapacity=1 \
-  --context project_name=dev-protein-agent
-```
-
-### Production Deployment
-
-```bash
-# Deploy with production settings
-uv run cdk deploy VEPEndpointStack \
-  --parameters InstanceType=ml.g6.4xlarge \
-  --parameters MinCapacity=1 \
-  --parameters MaxCapacity=10 \
-  --context project_name=prod-protein-agent
+# Or deploy with custom configuration
+./deploy.sh --instance-type ml.g6.4xlarge --min-capacity 1 --max-capacity 10
 ```
 
 ## Usage Examples
