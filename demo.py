@@ -31,7 +31,7 @@ if __name__ == "__main__":
     with gateway_client:
         tools = gateway_client.list_tools_sync()
         agent = Agent(
-            model="us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+            model="global.anthropic.claude-sonnet-4-20250514-v1:0",
             tools=tools,
             system_prompt="You are a helpful assistant designed to answer question about proteins and submit analysis jobs using the tools available",
             callback_handler=None,
