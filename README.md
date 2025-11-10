@@ -7,13 +7,15 @@ AI agents are revolutionizing drug discovery by enabling researchers to rapidly 
 
 ## Overview
 
-This CDK stack deploys a complete SageMaker async inference solution for the AMPLIFY protein variant effect prediction model, including:
+This project deploys a complete SageMaker async inference solution for the AMPLIFY protein variant effect prediction model using AWS CloudFormation, including:
 
 - **SageMaker Async Endpoint**: GPU-optimized endpoint with auto-scaling
 - **S3 Storage**: Auto-generated secure bucket for input/output data
 - **Auto-scaling**: Scale to zero when idle, scale up based on queue backlog
+- **Cognito Authentication**: OAuth2 client credentials flow for secure access
+- **AgentCore Gateway**: MCP integration for AI agent communication
 - **Security**: IAM roles with least-privilege access
-- **Reliable Cleanup**: No more S3 deletion issues during stack destruction
+- **Reliable Cleanup**: S3 bucket retention policy to prevent data loss
 
 ## Architecture
 
@@ -24,9 +26,7 @@ This CDK stack deploys a complete SageMaker async inference solution for the AMP
 ### Prerequisites
 
 - AWS CLI configured with appropriate permissions
-- Node.js 18+ and npm
-- Python 3.13+ with uv package manager
-- AWS CDK CLI: `npm install -g aws-cdk`
+- Python 3.13+ with uv package manager (for testing and examples)
 - **uv**: Install from <https://docs.astral.sh/uv/getting-started/installation/>
 
 ### Installation
@@ -39,77 +39,81 @@ cd protein-engineering-agent
 uv sync
 ```
 
-2. **Install CDK dependencies**:
-
-```bash
-npm install
-```
-
-3. **Bootstrap CDK** (first time only):
-
-```bash
-uv run cdk bootstrap
-```
-
 ### Deployment
 
-1. **Deploy with defaults**:
+Deploy all infrastructure using the CloudFormation deployment script:
 
 ```bash
-uv run cdk deploy --all
+cd cloudformation/scripts
+./deploy.sh --project-name protein-engineering --region us-east-1
 ```
 
-2. Create Bedrock AgentCore Gateway
+The deployment script will:
+1. Validate all CloudFormation templates
+2. Deploy the VEP Endpoint stack (SageMaker + Lambda)
+3. Deploy the Cognito stack (authentication)
+4. Deploy the Gateway stack (AgentCore Gateway)
+5. Display all stack outputs including the Gateway URL
+
+For detailed deployment instructions and configuration options, see [cloudformation/README.md](cloudformation/README.md).
+
+### Testing
+
+1. **Get OAuth Token**:
 
 ```bash
-uv run deploy_agentcore.py
+uv run get_token.py
 ```
 
-3. Get Token
-
-```bash
-uv run get_token.py 
-```
-
-### Test with MCP Inspector
-
-1. Install and start MCP Inspector
+2. **Test with MCP Inspector**:
 
 ```bash
 npx @modelcontextprotocol/inspector
 ```
 
-2. Configuring the following parameters in the Inspector interface to connect to your gateway:
-
+Configure the Inspector interface:
 - Transport Type: Select Streamable HTTP
-- URL: Enter gateway's MCP endpoint URL returned in the output of `deploy_agentcore_gateway.py`
+- URL: Enter the Gateway URL from deployment outputs
 - Authentication:
   - Header name: Authorization
-  - Bearer token: The bearer token returned in the output of `get_token.py`
+  - Bearer token: The token from `get_token.py`
 
-3. Select **Connect** to establish a connection to your gateway.
-4. Select **List Tools** to view all available tools provided by your gateway.
-5. Select the **protein-engineering-lambda__invoke_endpoint** tool.
-6. Enter an amino acid sequence in the sequence test field (e.g. `FVNQHLCGSHLVEALYLVCGERGFFYTPKT`) and select **Run Tool**. Take note of the **output_id** value in the response message.
-7. Select the **protein-engineering-lambda___get_results** tool.
-8. Enter the **output_id** returned from step 6 in the output_id field and select **Run Tool**.
-9. Depending on your autoscaling configuration, it may take several minutes to provision an endpoint instance and process the request. In the meantime, the **get_results** tool will return a "Prediction is still in progress" message.
-10. Once the prediction is complete, **get_results** will download the result object from S3 and display the heatmap and outlier values in the response.
+3. **Test Protein Prediction**:
+   - Select **Connect** to establish a connection
+   - Select **List Tools** to view available tools
+   - Select **protein-engineering-lambda__invoke_endpoint**
+   - Enter an amino acid sequence (e.g. `FVNQHLCGSHLVEALYLVCGERGFFYTPKT`)
+   - Select **Run Tool** and note the **output_id**
+   - Select **protein-engineering-lambda___get_results**
+   - Enter the **output_id** and select **Run Tool**
+   - Wait for prediction completion (may take several minutes for first request)
 
 ## Configuration
 
-### Stack Parameters
+### CloudFormation Parameters
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `InstanceType` | `ml.g6.2xlarge` | EC2 instance type for endpoint |
-| `ModelId` | `chandar-lab/AMPLIFY_350M` | HuggingFace model identifier |
-| ~~`S3BucketName`~~ | ~~Auto-generated~~ | ~~S3 bucket names are now auto-generated by CDK~~ |
-| `MinCapacity` | `0` | Minimum instances (0 = scale to zero) |
-| `MaxCapacity` | `2` | Maximum instances for auto-scaling |
-| `MaxConcurrentInvocations` | `4` | Concurrent requests per instance |
+The deployment can be customized using parameter files in `cloudformation/parameters/`:
 
-**Note**: S3 bucket names are automatically generated by CDK (e.g., `sagemakerasyncstack-dev-asyncinferencebucket-xyz123`) to ensure uniqueness and avoid naming conflicts. You can find the actual bucket name in the stack outputs after deployment.
+**VEP Endpoint Parameters** (`vep-parameters.json`):
+- `ProjectName`: Project identifier (default: `protein-engineering`)
+- `InstanceType`: EC2 instance type (default: `ml.g6.2xlarge`)
+- `ModelId`: HuggingFace model identifier (default: `chandar-lab/AMPLIFY_350M`)
+- `MinCapacity`: Minimum instances (default: `1`, set to `0` for scale-to-zero)
+- `MaxCapacity`: Maximum instances (default: `2`)
+- `MaxConcurrentInvocations`: Concurrent requests per instance (default: `4`)
+- `EnableAutoScaling`: Enable auto-scaling (default: `true`)
+
+**Cognito Parameters** (`cognito-parameters.json`):
+- `UserPoolName`: Cognito user pool name
+- `ResourceServerIdentifier`: OAuth resource server identifier
+- `ClientName`: OAuth client name
+- `MinPasswordLength`: Minimum password length (default: `12`)
+
+**Gateway Parameters** (`gateway-parameters.json`):
+- `GatewayName`: AgentCore Gateway name
+- `GatewayDescription`: Gateway description
+
+For detailed configuration options, see [cloudformation/README.md](cloudformation/README.md).
 
 ## Monitoring and Troubleshooting
 
@@ -128,14 +132,14 @@ The stack creates several alarms:
 
 ### Common Issues
 
-#### 1. Endpoint Creation Fails
+#### 1. Stack Deployment Fails
 
 ```bash
 # Check CloudFormation events
-aws cloudformation describe-stack-events --stack-name VEPEndpointStack
+aws cloudformation describe-stack-events --stack-name protein-engineering-vep
 
-# Check SageMaker endpoint status
-aws sagemaker describe-endpoint --endpoint-name your-endpoint-name
+# Check stack status
+aws cloudformation describe-stacks --stack-name protein-engineering-vep
 ```
 
 #### 2. Auto-scaling Not Working
@@ -165,13 +169,18 @@ aws iam simulate-principal-policy \
   --resource-arns arn:aws:s3:::your-auto-generated-bucket-name/*
 ```
 
-#### 4. Finding Your Bucket Name
+#### 4. Finding Stack Outputs
 
 ```bash
-# Get bucket name from stack outputs
+# Get all VEP stack outputs
 aws cloudformation describe-stacks \
-  --stack-name VEPEndpointStack \
-  --query 'Stacks[0].Outputs[?OutputKey==`AsyncInferenceBucketName`].OutputValue' \
+  --stack-name protein-engineering-vep \
+  --query 'Stacks[0].Outputs'
+
+# Get Gateway URL
+aws cloudformation describe-stacks \
+  --stack-name protein-engineering-gateway \
+  --query 'Stacks[0].Outputs[?OutputKey==`GatewayUrl`].OutputValue' \
   --output text
 ```
 
@@ -210,42 +219,57 @@ vpc_config = {
 
 - S3 bucket uses server-side encryption (SSE-S3)
 - SageMaker endpoint encrypts data in transit
+- Secrets Manager stores Cognito client secrets securely
 - Consider KMS encryption for sensitive data
 
 ## Advanced Configuration
 
-### Custom Model Artifacts
+### Custom Parameters
 
-```python
-# Deploy with custom model
-uv run cdk deploy VEPEndpointStack \
-  --parameters ModelId=s3://my-bucket/my-model.tar.gz
+Edit parameter files in `cloudformation/parameters/` before deployment:
+
+```bash
+# Edit VEP parameters
+vi cloudformation/parameters/vep-parameters.json
+
+# Deploy with custom parameters
+cd cloudformation/scripts
+./deploy.sh --project-name my-project --region us-west-2
 ```
 
 ### Integration with CI/CD
 
 ```yaml
 # GitHub Actions example
-- name: Deploy SageMaker Stack
+- name: Deploy CloudFormation Stacks
   run: |
-    uv run cdk deploy VEPEndpointStack \
-      --require-approval never \
-      --context environment=${{ github.ref_name }}
+    cd cloudformation/scripts
+    ./deploy.sh \
+      --project-name ${{ github.event.repository.name }} \
+      --region us-east-1 \
+      --instance-type ml.g6.2xlarge
 ```
 
 ## Cleanup
 
-### Delete Gateway
+Delete all stacks in reverse order:
 
 ```bash
-uv run delete_agentcore.py
+# Delete Gateway stack
+aws cloudformation delete-stack --stack-name protein-engineering-gateway
+
+# Delete Cognito stack
+aws cloudformation delete-stack --stack-name protein-engineering-cognito
+
+# Delete VEP stack
+aws cloudformation delete-stack --stack-name protein-engineering-vep
+
+# Note: S3 bucket is retained by default to prevent data loss
+# Manually delete if needed:
+aws s3 rb s3://your-bucket-name --force
 ```
 
-### Destroy Stack
-
-```bash
-uv run cdk destroy --all
-```
+For detailed cleanup instructions, see [cloudformation/README.md](cloudformation/README.md).
 
 ## Support and Contributing
 

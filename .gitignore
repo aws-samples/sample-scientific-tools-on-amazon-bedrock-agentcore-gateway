@@ -5,9 +5,14 @@ __pycache__
 .venv
 *.egg-info
 
-# CDK asset staging directory
-.cdk.staging
-cdk.out
+# CloudFormation
+cloudformation/packaged-templates/
+cloudformation/*.packaged.yaml
+cloudformation/*.packaged.json
+
+# Lambda deployment packages
+*.zip
+lambda-deployment-*.zip
 
 # Other
 .DS_Store
@@ -16,3 +21,5 @@ inference_code.tar.gz
 .coverage
 gateway-deployment.json
 htmlcov
+
+cdk.out

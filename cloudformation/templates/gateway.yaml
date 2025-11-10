@@ -1,0 +1,310 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Gateway Stack - Amazon Bedrock AgentCore Gateway infrastructure for MCP integration'
+
+# ============================================================================
+# TEMPLATE OVERVIEW
+# ============================================================================
+# This CloudFormation template deploys Amazon Bedrock AgentCore Gateway
+# with MCP (Model Context Protocol) integration for AI agent communication.
+#
+# Key Components:
+# - IAM Role for AgentCore Gateway with Lambda invoke permissions
+# - AgentCore Gateway with JWT authorization (Cognito integration)
+# - Gateway Target connecting to Lambda function for protein prediction
+# - MCP tool schema defining invoke_endpoint and get_results operations
+#
+# Dependencies:
+# - VEP Stack: Requires Lambda function ARN from SSM Parameter Store
+# - Cognito Stack: Requires discovery URL and client ID from SSM Parameter Store
+#
+# Stack Deployment Order:
+# 1. VEP Endpoint Stack (creates Lambda, stores ARN in SSM)
+# 2. Cognito Stack (creates auth config, stores in SSM)
+# 3. Gateway Stack (reads from SSM, creates gateway) <- THIS STACK
+#
+# Outputs:
+# - Gateway URL for MCP client connections
+# - Gateway ID and ARN for reference
+# - IAM role information
+# ============================================================================
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Project Configuration'
+        Parameters:
+          - ProjectName
+      - Label:
+          default: 'Gateway Configuration'
+        Parameters:
+          - GatewayName
+          - GatewayDescription
+    ParameterLabels:
+      ProjectName:
+        default: 'Project Name'
+      GatewayName:
+        default: 'Gateway Name'
+      GatewayDescription:
+        default: 'Gateway Description'
+
+# ============================================================================
+# PARAMETERS
+# ============================================================================
+# Configure Gateway naming and description
+# ============================================================================
+
+Parameters:
+  # ----------------------------------------------------------------------------
+  # Project Configuration
+  # ----------------------------------------------------------------------------
+  ProjectName:
+    Type: String
+    Default: 'protein-engineering'
+    Description: 'Project name used for resource naming and tagging'
+    MinLength: 1
+    MaxLength: 64
+    AllowedPattern: '^[a-z0-9-]+$'
+    ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
+
+  # ----------------------------------------------------------------------------
+  # Gateway Configuration
+  # ----------------------------------------------------------------------------
+  GatewayName:
+    Type: String
+    Default: 'agentcore-gateway'
+    Description: 'Name for the AgentCore Gateway'
+    MinLength: 1
+    MaxLength: 128
+    AllowedPattern: '^[a-zA-Z0-9-_]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters, hyphens, and underscores'
+
+  GatewayDescription:
+    Type: String
+    Default: 'AgentCore Gateway for protein engineering agent with MCP integration'
+    Description: 'Description for the AgentCore Gateway'
+    MinLength: 1
+    MaxLength: 256
+
+# ============================================================================
+# RESOURCES
+# ============================================================================
+Resources:
+  # ----------------------------------------------------------------------------
+  # IAM ROLE FOR AGENTCORE GATEWAY
+  # ----------------------------------------------------------------------------
+  # Allows Gateway to invoke Lambda function for protein prediction
+  # Uses dynamic SSM reference to get Lambda ARN from VEP stack
+  # ----------------------------------------------------------------------------
+
+  GatewayRole:
+    Type: AWS::IAM::Role
+    # Purpose: Grants AgentCore Gateway permission to invoke Lambda function
+    # Trust Policy: Only bedrock-agentcore.amazonaws.com can assume this role
+    # Conditions: Restricts to same account and AgentCore service ARNs
+    # Permissions: lambda:InvokeFunction on specific Lambda (from SSM)
+    Properties:
+      RoleName: !Sub '${ProjectName}-agentcore-gateway-role'
+      Description: 'Execution role for Amazon Bedrock AgentCore Gateway to invoke Lambda functions'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: 'sts:AssumeRole'
+            Condition:
+              StringEquals:
+                'aws:SourceAccount': !Ref AWS::AccountId
+              ArnLike:
+                'aws:SourceArn': !Sub 'arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:*'
+      Policies:
+        - PolicyName: 'LambdaInvokeAccess'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'lambda:InvokeFunction'
+                Resource: '{{resolve:ssm:/protein-agent/lambda-function-arn}}'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: Component
+          Value: Gateway
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # ----------------------------------------------------------------------------
+  # SSM PARAMETER FOR GATEWAY ROLE
+  # ----------------------------------------------------------------------------
+  # Stores Gateway role ARN for reference (optional, for future use)
+  # ----------------------------------------------------------------------------
+
+  GatewayRoleArnParameter:
+    Type: AWS::SSM::Parameter
+    # Purpose: Stores Gateway IAM role ARN for reference
+    # Usage: Can be used by monitoring or management tools
+    Properties:
+      Name: '/protein-agent/gateway/role-arn'
+      Description: 'AgentCore Gateway IAM role ARN'
+      Type: String
+      Value: !GetAtt GatewayRole.Arn
+      Tier: Standard
+      Tags:
+        Project: !Ref ProjectName
+        ManagedBy: CloudFormation
+
+  # ----------------------------------------------------------------------------
+  # AGENTCORE GATEWAY
+  # ----------------------------------------------------------------------------
+  # Main gateway resource that provides MCP endpoint for AI agents
+  # Configured with JWT authorization using Cognito
+  # Uses dynamic SSM references to retrieve Cognito configuration
+  # ----------------------------------------------------------------------------
+
+  AgentCoreGateway:
+    Type: AWS::BedrockAgentCore::Gateway
+    # Purpose: Creates MCP-compatible gateway for AI agent communication
+    # Protocol: MCP (Model Context Protocol) with SEMANTIC search
+    # Authorization: CUSTOM_JWT using Cognito for token validation
+    # Dynamic References: Retrieves Cognito config from SSM at deployment time
+    Properties:
+      Name: !Ref GatewayName
+      Description: !Ref GatewayDescription
+      RoleArn: !GetAtt GatewayRole.Arn
+      ProtocolType: MCP
+      AuthorizerType: CUSTOM_JWT
+      AuthorizerConfiguration:
+        CustomJWTAuthorizer:
+          DiscoveryUrl: '{{resolve:ssm:/protein-agent/cognito/discovery-url}}'
+          AllowedClients:
+            - '{{resolve:ssm:/protein-agent/cognito/client-id}}'
+      ProtocolConfiguration:
+        Mcp:
+          SearchType: SEMANTIC
+      Tags:
+        Project: !Ref ProjectName
+        Component: Gateway
+        ManagedBy: CloudFormation
+
+  # ----------------------------------------------------------------------------
+  # GATEWAY TARGET
+  # ----------------------------------------------------------------------------
+  # Connects Gateway to Lambda function with MCP tool schema
+  # Defines invoke_endpoint and get_results operations
+  # Uses dynamic SSM reference to retrieve Lambda ARN from VEP stack
+  # ----------------------------------------------------------------------------
+
+  GatewayTarget:
+    Type: AWS::BedrockAgentCore::GatewayTarget
+    # Purpose: Connects Gateway to Lambda function for protein prediction
+    # Tool Schema: Defines two MCP tools (invoke_endpoint, get_results)
+    # Credentials: Uses Gateway IAM role for Lambda invocation
+    # Dynamic Reference: Retrieves Lambda ARN from SSM at deployment time
+    Properties:
+      Name: 'protein-engineering-lambda'
+      Description: 'Lambda target for protein variant effect prediction'
+      GatewayIdentifier: !Ref AgentCoreGateway
+      TargetConfiguration:
+        Mcp:
+          Lambda:
+            LambdaArn: '{{resolve:ssm:/protein-agent/lambda-function-arn}}'
+            ToolSchema:
+              InlinePayload:
+                - Name: 'invoke_endpoint'
+                  Description: 'Submit a job to predict the variant effects for an amino acid sequence'
+                  InputSchema:
+                    Type: 'object'
+                    Properties:
+                      sequence:
+                        Type: 'string'
+                        Description: 'Amino acid sequence'
+                    Required:
+                      - 'sequence'
+                - Name: 'get_results'
+                  Description: 'Check if a variant effect prediction job has completed and retrieve results'
+                  InputSchema:
+                    Type: 'object'
+                    Properties:
+                      output_id:
+                        Type: 'string'
+                        Description: 'output_id returned by invoke_endpoint'
+                    Required:
+                      - 'output_id'
+      CredentialProviderConfigurations:
+        - CredentialProviderType: GATEWAY_IAM_ROLE
+
+# ============================================================================
+# OUTPUTS
+# ============================================================================
+# Provides Gateway connection information and resource identifiers
+# ============================================================================
+
+Outputs:
+  # ----------------------------------------------------------------------------
+  # Gateway Outputs
+  # ----------------------------------------------------------------------------
+  GatewayId:
+    Description: 'AgentCore Gateway ID'
+    Value: !Ref AgentCoreGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-GatewayId'
+
+  GatewayUrl:
+    Description: 'AgentCore Gateway MCP URL'
+    Value: !GetAtt AgentCoreGateway.GatewayUrl
+    Export:
+      Name: !Sub '${AWS::StackName}-GatewayUrl'
+
+  GatewayArn:
+    Description: 'AgentCore Gateway ARN'
+    Value: !GetAtt AgentCoreGateway.GatewayArn
+    Export:
+      Name: !Sub '${AWS::StackName}-GatewayArn'
+
+  # IAM Role Outputs
+  GatewayRoleArn:
+    Description: 'AgentCore Gateway IAM role ARN'
+    Value: !GetAtt GatewayRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-GatewayRoleArn'
+
+  GatewayRoleName:
+    Description: 'AgentCore Gateway IAM role name'
+    Value: !Ref GatewayRole
+    Export:
+      Name: !Sub '${AWS::StackName}-GatewayRoleName'
+
+  # Target Outputs
+  TargetId:
+    Description: 'Gateway Target ID'
+    Value: !Ref GatewayTarget
+    Export:
+      Name: !Sub '${AWS::StackName}-TargetId'
+
+  TargetName:
+    Description: 'Gateway Target name'
+    Value: 'protein-engineering-lambda'
+    Export:
+      Name: !Sub '${AWS::StackName}-TargetName'
+
+  # SSM Parameter Outputs
+  GatewayRoleArnParameterName:
+    Description: 'SSM Parameter name for Gateway role ARN'
+    Value: '/protein-agent/gateway/role-arn'
+    Export:
+      Name: !Sub '${AWS::StackName}-GatewayRoleArnParameter'
+
+  # Configuration Outputs
+  ProjectName:
+    Description: 'Project name used for resource naming'
+    Value: !Ref ProjectName
+    Export:
+      Name: !Sub '${AWS::StackName}-ProjectName'
+
+  GatewayName:
+    Description: 'Gateway name'
+    Value: !Ref GatewayName
+    Export:
+      Name: !Sub '${AWS::StackName}-GatewayName'

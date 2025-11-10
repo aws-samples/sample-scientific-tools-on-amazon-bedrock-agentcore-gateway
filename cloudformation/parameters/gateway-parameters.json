@@ -1,0 +1,14 @@
+[
+  {
+    "ParameterKey": "ProjectName",
+    "ParameterValue": "protein-engineering"
+  },
+  {
+    "ParameterKey": "GatewayName",
+    "ParameterValue": "agentcore-gateway"
+  },
+  {
+    "ParameterKey": "GatewayDescription",
+    "ParameterValue": "AgentCore Gateway for protein engineering agent with MCP integration"
+  }
+]

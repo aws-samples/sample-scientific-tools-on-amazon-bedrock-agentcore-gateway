@@ -1,0 +1,30 @@
+[
+  {
+    "ParameterKey": "ProjectName",
+    "ParameterValue": "protein-engineering"
+  },
+  {
+    "ParameterKey": "InstanceType",
+    "ParameterValue": "ml.g6.2xlarge"
+  },
+  {
+    "ParameterKey": "ModelId",
+    "ParameterValue": "chandar-lab/AMPLIFY_350M"
+  },
+  {
+    "ParameterKey": "MinCapacity",
+    "ParameterValue": "1"
+  },
+  {
+    "ParameterKey": "MaxCapacity",
+    "ParameterValue": "2"
+  },
+  {
+    "ParameterKey": "MaxConcurrentInvocations",
+    "ParameterValue": "4"
+  },
+  {
+    "ParameterKey": "EnableAutoScaling",
+    "ParameterValue": "true"
+  }
+]

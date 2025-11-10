@@ -1,0 +1,832 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'VEP Endpoint Stack - SageMaker Async Inference infrastructure for variant effect prediction'
+
+# ============================================================================
+# TEMPLATE OVERVIEW
+# ============================================================================
+# This CloudFormation template deploys a complete SageMaker Async Inference
+# endpoint for protein variant effect prediction using the AMPLIFY model.
+#
+# Key Components:
+# - SageMaker Model, EndpointConfig, and Endpoint for async inference
+# - S3 bucket for input/output data with encryption and security policies
+# - Lambda function for endpoint invocation and result retrieval
+# - IAM roles with least-privilege permissions for SageMaker and Lambda
+# - Application Auto Scaling for cost-effective scaling (including scale-to-zero)
+# - CloudWatch Alarms for monitoring and triggering auto-scaling
+# - SSM Parameter Store integration for cross-stack references
+#
+# Dependencies:
+# - None (this is an independent stack)
+#
+# Outputs:
+# - Lambda ARN stored in SSM Parameter Store for Gateway stack consumption
+# - Endpoint details, S3 bucket information, and IAM role ARNs
+# ============================================================================
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Project Configuration'
+        Parameters:
+          - ProjectName
+      - Label:
+          default: 'SageMaker Configuration'
+        Parameters:
+          - InstanceType
+          - ModelId
+          - MaxConcurrentInvocations
+      - Label:
+          default: 'Auto Scaling Configuration'
+        Parameters:
+          - EnableAutoScaling
+          - MinCapacity
+          - MaxCapacity
+    ParameterLabels:
+      ProjectName:
+        default: 'Project Name'
+      InstanceType:
+        default: 'Instance Type'
+      ModelId:
+        default: 'Model ID'
+      MinCapacity:
+        default: 'Minimum Capacity'
+      MaxCapacity:
+        default: 'Maximum Capacity'
+      MaxConcurrentInvocations:
+        default: 'Max Concurrent Invocations'
+      EnableAutoScaling:
+        default: 'Enable Auto Scaling'
+
+# ============================================================================
+# PARAMETERS
+# ============================================================================
+# These parameters allow customization of the deployment without modifying
+# the template. All parameters have sensible defaults for development use.
+# ============================================================================
+
+Parameters:
+  # ----------------------------------------------------------------------------
+  # Project Configuration
+  # ----------------------------------------------------------------------------
+  ProjectName:
+    Type: String
+    Default: 'protein-engineering'
+    Description: 'Project name used for resource naming and tagging'
+    MinLength: 1
+    MaxLength: 64
+    AllowedPattern: '^[a-z0-9-]+$'
+    ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
+    # Used as prefix for all resource names to ensure uniqueness and easy identification
+
+  # ----------------------------------------------------------------------------
+  # SageMaker Configuration
+  # ----------------------------------------------------------------------------
+  InstanceType:
+    Type: String
+    Default: 'ml.g6.2xlarge'
+    Description: 'EC2 instance type for SageMaker endpoint (must be GPU-enabled)'
+    # AMPLIFY model requires GPU instances for efficient inference
+    # ml.g6 instances provide best price/performance for this workload
+    # Larger instances support higher MaxConcurrentInvocations
+    AllowedValues:
+      - 'ml.g6.2xlarge'
+      - 'ml.g6.4xlarge'
+      - 'ml.g6.8xlarge'
+      - 'ml.g6.12xlarge'
+      - 'ml.g6e.2xlarge'
+      - 'ml.g6e.4xlarge'
+      - 'ml.g6e.8xlarge'
+      - 'ml.g6e.12xlarge'
+      - 'ml.g5.2xlarge'
+      - 'ml.g5.4xlarge'
+      - 'ml.g5.8xlarge'
+      - 'ml.g5.12xlarge'
+      - 'ml.p4d.24xlarge'
+      - 'ml.p3.2xlarge'
+      - 'ml.p3.8xlarge'
+      - 'ml.p3.16xlarge'
+
+  ModelId:
+    Type: String
+    Default: 'chandar-lab/AMPLIFY_350M'
+    Description: 'HuggingFace model identifier for AMPLIFY model'
+    MinLength: 1
+    MaxLength: 256
+    # AMPLIFY is a protein language model
+    # The model is loaded from HuggingFace Hub during endpoint initialization
+
+  # ----------------------------------------------------------------------------
+  # Auto Scaling Configuration
+  # ----------------------------------------------------------------------------
+  MinCapacity:
+    Type: Number
+    Default: 1
+    Description: 'Minimum number of instances for auto scaling'
+    MinValue: 0
+    MaxValue: 10
+    # Set to 0 for scale-to-zero capability (cost savings when idle)
+    # Set to 1+ for faster response times (no cold start delay)
+
+  MaxCapacity:
+    Type: Number
+    Default: 2
+    Description: 'Maximum number of instances for auto scaling'
+    MinValue: 1
+    MaxValue: 20
+    # Limits maximum cost and ensures controlled scaling
+    # Increase for higher throughput requirements
+
+  MaxConcurrentInvocations:
+    Type: Number
+    Default: 4
+    Description: 'Maximum concurrent invocations per instance'
+    MinValue: 1
+    MaxValue: 1000
+    # Controls how many async requests can be processed simultaneously per instance
+    # Higher values increase throughput but require more instance memory
+    # Recommended: 4-8 for ml.g6.2xlarge, scale up for larger instances
+
+  EnableAutoScaling:
+    Type: String
+    Default: 'true'
+    Description: 'Enable auto scaling for the SageMaker endpoint'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    # Set to 'false' to maintain fixed capacity (useful for testing)
+    # Set to 'true' for production to optimize costs and handle variable load
+
+# ============================================================================
+# CONDITIONS
+# ============================================================================
+Conditions:
+  # Controls whether auto-scaling resources are created
+  AutoScalingEnabled: !Equals [!Ref EnableAutoScaling, 'true']
+
+# ============================================================================
+# RESOURCES
+# ============================================================================
+Resources:
+  # ----------------------------------------------------------------------------
+  # IAM ROLES
+  # ----------------------------------------------------------------------------
+  # These roles follow the principle of least privilege, granting only the
+  # permissions necessary for each service to function.
+  # ----------------------------------------------------------------------------
+
+  SageMakerExecutionRole:
+    Type: AWS::IAM::Role
+    # Purpose: Allows SageMaker to access required AWS services (S3, ECR, CloudWatch)
+    # Used by: SageMaker Model, EndpointConfig, and Endpoint resources
+    # Trust Policy: Only sagemaker.amazonaws.com can assume this role
+    Properties:
+      RoleName: !Sub '${ProjectName}-sagemaker-execution-role'
+      Description: 'Execution role for SageMaker async inference endpoint'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: sagemaker.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: 'SageMakerModelPermissions'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'sagemaker:CreateModel'
+                  - 'sagemaker:DescribeModel'
+                  - 'sagemaker:DeleteModel'
+                  - 'sagemaker:CreateEndpointConfig'
+                  - 'sagemaker:DescribeEndpointConfig'
+                  - 'sagemaker:DeleteEndpointConfig'
+                  - 'sagemaker:CreateEndpoint'
+                  - 'sagemaker:DescribeEndpoint'
+                  - 'sagemaker:DeleteEndpoint'
+                  - 'sagemaker:InvokeEndpoint'
+                  - 'sagemaker:InvokeEndpointAsync'
+                Resource:
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:model/amplify-vep-model'
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint-config/amplify-vep-config'
+                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/amplify-vep-endpoint'
+        - PolicyName: 'ECRContainerAccess'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ecr:BatchCheckLayerAvailability'
+                  - 'ecr:GetDownloadUrlForLayer'
+                  - 'ecr:BatchGetImage'
+                Resource: !Sub 'arn:aws:ecr:${AWS::Region}:763104351884:repository/pytorch-inference'
+              - Effect: Allow
+                Action:
+                  - 'ecr:GetAuthorizationToken'
+                Resource: '*'
+        - PolicyName: 'CloudWatchLogsAccess'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:DescribeLogGroups'
+                  - 'logs:DescribeLogStreams'
+                Resource:
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/sagemaker/Endpoints/${ProjectName}-*'
+                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/sagemaker/Endpoints/${ProjectName}-*:*'
+              - Effect: Allow
+                Action:
+                  - 'cloudwatch:PutMetricData'
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    'cloudwatch:namespace': 'AWS/SageMaker'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    # Purpose: Allows Lambda to invoke SageMaker async endpoint and access S3/CloudWatch
+    # Used by: Lambda function for endpoint invocation and result retrieval
+    # Trust Policy: Only lambda.amazonaws.com can assume this role
+    Properties:
+      RoleName: !Sub '${ProjectName}-lambda-execution-role'
+      Description: 'Execution role for Lambda function that integrates with SageMaker async endpoint'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: 'SageMakerAsyncAccess'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'sagemaker:InvokeEndpointAsync'
+                  - 'sagemaker:DescribeEndpoint'
+                Resource: !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/amplify-vep-endpoint'
+        - PolicyName: 'CloudWatchMetricsAccess'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:DescribeLogGroups'
+                  - 'logs:CreateLogGroup'
+                  - 'logs:DescribeLogStreams'
+                  - 'logs:CreateLogStream'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-*-async-endpoint-lambda'
+              - Effect: Allow
+                Action:
+                  - 'cloudwatch:PutMetricData'
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    'cloudwatch:namespace':
+                      - 'SageMaker/AsyncEndpoint/Lambda'
+                      - 'AWS/Lambda'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # ----------------------------------------------------------------------------
+  # S3 BUCKET FOR ASYNC INFERENCE
+  # ----------------------------------------------------------------------------
+  # Stores input data, output results, and failure information for async inference
+  # Configured with encryption, public access blocking, and SSL enforcement
+  # DeletionPolicy: Retain prevents accidental data loss during stack deletion
+  # ----------------------------------------------------------------------------
+
+  AsyncInferenceBucket:
+    Type: AWS::S3::Bucket
+    # Purpose: Stores async inference input/output data and model artifacts
+    # Prefixes: async-inference-input/, async-inference-output/, async-inference-failures/
+    # Security: Encrypted at rest, public access blocked, SSL required
+    Properties:
+      BucketName: !Sub '${ProjectName}-async-inference-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Suspended
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ManagedBy
+          Value: CloudFormation
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+  AsyncInferenceBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    # Purpose: Enforces SSL/TLS for all S3 operations (security best practice)
+    # Denies any request that doesn't use HTTPS
+    Properties:
+      Bucket: !Ref AsyncInferenceBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'DenyInsecureTransport'
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource:
+              - !GetAtt AsyncInferenceBucket.Arn
+              - !Sub '${AsyncInferenceBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+
+  # ----------------------------------------------------------------------------
+  # S3 ACCESS POLICIES
+  # ----------------------------------------------------------------------------
+  # Attach S3 permissions to IAM roles after bucket creation
+  # Separate policies allow for cleaner permission management
+  # ----------------------------------------------------------------------------
+
+  SageMakerS3AccessPolicy:
+    Type: AWS::IAM::Policy
+    # Purpose: Grants SageMaker role access to S3 bucket for async inference
+    # Permissions: ListBucket, GetObject, PutObject, DeleteObject on specific prefixes
+    Properties:
+      PolicyName: 'S3AsyncInferenceAccess'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - 's3:ListBucket'
+            Resource: !GetAtt AsyncInferenceBucket.Arn
+          - Effect: Allow
+            Action:
+              - 's3:GetObject'
+              - 's3:PutObject'
+              - 's3:DeleteObject'
+            Resource:
+              - !Sub '${AsyncInferenceBucket.Arn}/async-inference-input/*'
+              - !Sub '${AsyncInferenceBucket.Arn}/async-inference-output/*'
+              - !Sub '${AsyncInferenceBucket.Arn}/async-inference-failures/*'
+          - Effect: Allow
+            Action:
+              - 's3:GetObject'
+            Resource:
+              - !Sub '${AsyncInferenceBucket.Arn}/model-artifacts/*'
+              - !Sub '${AsyncInferenceBucket.Arn}/inference-code/*'
+      Roles:
+        - !Ref SageMakerExecutionRole
+
+  LambdaS3AccessPolicy:
+    Type: AWS::IAM::Policy
+    # Purpose: Grants Lambda role access to S3 bucket for reading results and writing inputs
+    # Permissions: PutObject for input, GetObject for output/failures
+    Properties:
+      PolicyName: 'S3AsyncInferenceAccess'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - 's3:ListBucket'
+            Resource: !GetAtt AsyncInferenceBucket.Arn
+          - Effect: Allow
+            Action:
+              - 's3:PutObject'
+            Resource: !Sub '${AsyncInferenceBucket.Arn}/async-inference-input/*'
+          - Effect: Allow
+            Action:
+              - 's3:GetObject'
+            Resource:
+              - !Sub '${AsyncInferenceBucket.Arn}/async-inference-output/*'
+              - !Sub '${AsyncInferenceBucket.Arn}/async-inference-failures/*'
+      Roles:
+        - !Ref LambdaExecutionRole
+
+  # ----------------------------------------------------------------------------
+  # SAGEMAKER RESOURCES
+  # ----------------------------------------------------------------------------
+  # Model -> EndpointConfig -> Endpoint (must be created in this order)
+  # ----------------------------------------------------------------------------
+
+  SageMakerModel:
+    Type: AWS::SageMaker::Model
+    # Purpose: Defines the ML model container and execution environment
+    # Container: PyTorch 2.6.0 with GPU support from AWS Deep Learning Containers
+    # Model Data: Inference code tarball loaded from S3
+    # Dependencies: Requires IAM role and S3 access policy to be created first
+    DependsOn:
+      - SageMakerS3AccessPolicy
+    Properties:
+      ModelName: 'amplify-vep-model'
+      ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
+      PrimaryContainer:
+        Image: !Sub '763104351884.dkr.ecr.${AWS::Region}.amazonaws.com/pytorch-inference:2.6.0-gpu-py312-cu124-ubuntu22.04-sagemaker'
+        ModelDataUrl: !Sub 's3://${AsyncInferenceBucket}/inference-code/inference_code.tar.gz'
+        Environment:
+          AMPLIFY_MODEL_ID: !Ref ModelId
+          SAGEMAKER_PROGRAM: 'inference.py'
+          SAGEMAKER_SUBMIT_DIRECTORY: '/opt/ml/code'
+          TS_DEFAULT_RESPONSE_TIMEOUT: '900'
+          MODEL_SERVER_TIMEOUT_ENV: '900'
+          OMP_NUM_THREADS: '1'
+          PYTHONUNBUFFERED: '1'
+          TRANSFORMERS_CACHE: '/tmp/transformers_cache'
+          PYTORCH_CUDA_ALLOC_CONF: 'max_split_size_mb:512'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ModelType
+          Value: AMPLIFY
+        - Key: InferenceType
+          Value: Async
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  EndpointConfig:
+    Type: AWS::SageMaker::EndpointConfig
+    # Purpose: Configures async inference settings and instance specifications
+    # Async Config: Defines S3 paths for output and failure handling
+    # MaxConcurrentInvocations: Controls throughput per instance
+    # Dependencies: Requires Model to exist before configuration can be created
+    DependsOn: SageMakerModel
+    Properties:
+      EndpointConfigName: 'amplify-vep-config'
+      ProductionVariants:
+        - VariantName: 'primary'
+          ModelName: 'amplify-vep-model'
+          InitialInstanceCount: 1
+          InstanceType: !Ref InstanceType
+          InitialVariantWeight: 1.0
+          ContainerStartupHealthCheckTimeoutInSeconds: 600
+          ModelDataDownloadTimeoutInSeconds: 900
+      AsyncInferenceConfig:
+        OutputConfig:
+          S3OutputPath: !Sub 's3://${AsyncInferenceBucket}/async-inference-output/'
+          S3FailurePath: !Sub 's3://${AsyncInferenceBucket}/async-inference-failures/'
+        ClientConfig:
+          MaxConcurrentInvocationsPerInstance: !Ref MaxConcurrentInvocations
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ModelType
+          Value: AMPLIFY
+        - Key: InferenceType
+          Value: Async
+        - Key: ConfigType
+          Value: AsyncEndpointConfig
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  SageMakerEndpoint:
+    Type: AWS::SageMaker::Endpoint
+    # Purpose: Creates the actual inference endpoint that processes requests
+    # Deployment Time: 5-10 minutes for initial creation (GPU instance provisioning)
+    # Dependencies: Requires EndpointConfig to exist
+    DependsOn: EndpointConfig
+    Properties:
+      EndpointName: 'amplify-vep-endpoint'
+      EndpointConfigName: 'amplify-vep-config'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ModelType
+          Value: AMPLIFY
+        - Key: InferenceType
+          Value: Async
+        - Key: ResourceType
+          Value: Endpoint
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # ----------------------------------------------------------------------------
+  # LAMBDA FUNCTION
+  # ----------------------------------------------------------------------------
+  # Provides MCP-compatible interface for endpoint invocation and result retrieval
+  # ----------------------------------------------------------------------------
+
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    # Purpose: Handles invoke_endpoint and get_results operations for AgentCore Gateway
+    # Runtime: Python 3.13 with boto3 for AWS SDK operations
+    # Timeout: 5 minutes to handle long-running operations
+    # Dependencies: Requires IAM role, S3 access, and endpoint to be ready
+    DependsOn:
+      - LambdaS3AccessPolicy
+      - SageMakerEndpoint
+    Properties:
+      FunctionName: !Sub '${ProjectName}-async-endpoint-lambda'
+      Description: 'Lambda function for SageMaker async endpoint integration with Bedrock Agent Core compatibility'
+      Runtime: python3.13
+      Handler: 'lambda_function.lambda_handler'
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Code:
+        S3Bucket: !Sub '${ProjectName}-lambda-code-${AWS::AccountId}'
+        S3Key: 'lambda_function.zip'
+      Timeout: 300
+      MemorySize: 256
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          SAGEMAKER_ENDPOINT_NAME: 'amplify-vep-endpoint'
+          S3_BUCKET_NAME: !Ref AsyncInferenceBucket
+          S3_INPUT_PREFIX: 'async-inference-input/'
+          S3_OUTPUT_PREFIX: 'async-inference-output/'
+          S3_FAILURE_PREFIX: 'async-inference-failures/'
+          LOG_LEVEL: 'INFO'
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+        - Key: ResourceType
+          Value: Lambda
+        - Key: Integration
+          Value: SageMakerAsync
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # ----------------------------------------------------------------------------
+  # AUTO SCALING RESOURCES
+  # ----------------------------------------------------------------------------
+  # Enables cost-effective scaling based on queue backlog metrics
+  # Scale-up: When HasBacklogWithoutCapacity >= 1 (requests waiting)
+  # Scale-down: When HasBacklogWithoutCapacity < 1 (no backlog)
+  # Conditional: Only created when EnableAutoScaling parameter is 'true'
+  # ----------------------------------------------------------------------------
+
+  ScalableTarget:
+    Type: AWS::ApplicationAutoScaling::ScalableTarget
+    # Purpose: Defines the scalable resource and capacity limits
+    # ResourceId: Points to the endpoint variant that will scale
+    # RoleARN: Uses AWS service-linked role for SageMaker auto-scaling
+    Condition: AutoScalingEnabled
+    DependsOn: SageMakerEndpoint
+    Properties:
+      ServiceNamespace: sagemaker
+      ResourceId: 'endpoint/amplify-vep-endpoint/variant/primary'
+      ScalableDimension: 'sagemaker:variant:DesiredInstanceCount'
+      MinCapacity: !Ref MinCapacity
+      MaxCapacity: !Ref MaxCapacity
+      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/sagemaker.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_SageMakerEndpoint'
+
+  ScaleUpPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    # Purpose: Adds instances when there's backlog without capacity
+    # Adjustment: +1 instance per trigger
+    # Cooldown: 5 minutes to allow new instance to stabilize
+    Condition: AutoScalingEnabled
+    DependsOn: ScalableTarget
+    Properties:
+      PolicyName: !Sub '${ProjectName}-HasBacklogWithoutCapacity-ScaleUp'
+      ServiceNamespace: sagemaker
+      ResourceId: 'endpoint/amplify-vep-endpoint/variant/primary'
+      ScalableDimension: 'sagemaker:variant:DesiredInstanceCount'
+      PolicyType: StepScaling
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        MetricAggregationType: Average
+        Cooldown: 300
+        StepAdjustments:
+          - MetricIntervalLowerBound: 0
+            ScalingAdjustment: 1
+
+  ScaleDownPolicy:
+    Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    # Purpose: Removes instances when there's no backlog (cost optimization)
+    # Adjustment: -1 instance per trigger
+    # Cooldown: 10 minutes to avoid flapping
+    Condition: AutoScalingEnabled
+    DependsOn: ScalableTarget
+    Properties:
+      PolicyName: !Sub '${ProjectName}-NoBacklog-ScaleDown'
+      ServiceNamespace: sagemaker
+      ResourceId: 'endpoint/amplify-vep-endpoint/variant/primary'
+      ScalableDimension: 'sagemaker:variant:DesiredInstanceCount'
+      PolicyType: StepScaling
+      StepScalingPolicyConfiguration:
+        AdjustmentType: ChangeInCapacity
+        MetricAggregationType: Average
+        Cooldown: 600
+        StepAdjustments:
+          - MetricIntervalUpperBound: 0
+            ScalingAdjustment: -1
+
+  HasBacklogAlarm:
+    Type: AWS::CloudWatch::Alarm
+    # Purpose: Triggers scale-up when requests are waiting without capacity
+    # Metric: HasBacklogWithoutCapacity (SageMaker async inference metric)
+    # Threshold: >= 1 for 2 consecutive periods (2 minutes)
+    # Action: Invokes ScaleUpPolicy to add instances
+    Condition: AutoScalingEnabled
+    Properties:
+      AlarmName: !Sub '${ProjectName}-HasBacklogWithoutCapacity-Alarm'
+      AlarmDescription: 'Alarm to trigger auto scaling when there is backlog without capacity'
+      MetricName: HasBacklogWithoutCapacity
+      Namespace: AWS/SageMaker
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 2
+      DatapointsToAlarm: 2
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      Dimensions:
+        - Name: EndpointName
+          Value: 'amplify-vep-endpoint'
+      AlarmActions:
+        - !Ref ScaleUpPolicy
+
+  NoBacklogAlarm:
+    Type: AWS::CloudWatch::Alarm
+    # Purpose: Triggers scale-down when there's no backlog (cost savings)
+    # Metric: HasBacklogWithoutCapacity < 1
+    # Threshold: < 1 for 5 consecutive periods (5 minutes)
+    # Action: Invokes ScaleDownPolicy to remove instances
+    Condition: AutoScalingEnabled
+    Properties:
+      AlarmName: !Sub '${ProjectName}-NoBacklog-Alarm'
+      AlarmDescription: 'Alarm to trigger scale down when there is no backlog'
+      MetricName: HasBacklogWithoutCapacity
+      Namespace: AWS/SageMaker
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      DatapointsToAlarm: 5
+      Threshold: 1
+      ComparisonOperator: LessThanThreshold
+      TreatMissingData: breaching
+      Dimensions:
+        - Name: EndpointName
+          Value: 'amplify-vep-endpoint'
+      AlarmActions:
+        - !Ref ScaleDownPolicy
+
+  # ----------------------------------------------------------------------------
+  # SSM PARAMETER:
+  # ----------------------------------------------------------------------------
+  # Stores Lambda ARN for cross-stack reference by Gateway stack
+  # Gateway stack uses dynamic reference: {{resolve:ssm:/protein-agent/lambda-function-arn}}
+  # ----------------------------------------------------------------------------
+
+  LambdaArnParameter:
+    Type: AWS::SSM::Parameter
+    # Purpose: Stores Lambda ARN for Gateway stack to reference
+    # Used by: Gateway stack IAM policy and Gateway Target configuration
+    # Type: String (standard tier, no cost)
+    Properties:
+      Name: '/protein-agent/lambda-function-arn'
+      Description: 'Lambda function ARN for protein engineering agent'
+      Type: String
+      Value: !GetAtt LambdaFunction.Arn
+      Tier: Standard
+      Tags:
+        Project: !Ref ProjectName
+        ManagedBy: CloudFormation
+
+# ============================================================================
+# OUTPUTS
+# ============================================================================
+# These outputs provide information about created resources and are exported
+# for use by other stacks or for reference in the CloudFormation console.
+# ============================================================================
+
+Outputs:
+  # ----------------------------------------------------------------------------
+  # Endpoint Outputs
+  # ----------------------------------------------------------------------------
+  EndpointName:
+    Description: 'Name of the created SageMaker async inference endpoint'
+    Value: 'amplify-vep-endpoint'
+    Export:
+      Name: !Sub '${AWS::StackName}-EndpointName'
+
+  EndpointArn:
+    Description: 'ARN of the created SageMaker async inference endpoint'
+    Value: !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/amplify-vep-endpoint'
+    Export:
+      Name: !Sub '${AWS::StackName}-EndpointArn'
+
+  # S3 Bucket Outputs
+  BucketName:
+    Description: 'S3 bucket name for async inference I/O'
+    Value: !Ref AsyncInferenceBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-BucketName'
+
+  BucketArn:
+    Description: 'S3 bucket ARN for async inference I/O'
+    Value: !GetAtt AsyncInferenceBucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-BucketArn'
+
+  AsyncInferenceInputPath:
+    Description: 'S3 path for async inference input files'
+    Value: !Sub 's3://${AsyncInferenceBucket}/async-inference-input/'
+    Export:
+      Name: !Sub '${AWS::StackName}-InputPath'
+
+  AsyncInferenceOutputPath:
+    Description: 'S3 path for async inference output files'
+    Value: !Sub 's3://${AsyncInferenceBucket}/async-inference-output/'
+    Export:
+      Name: !Sub '${AWS::StackName}-OutputPath'
+
+  # Lambda Outputs
+  LambdaFunctionArn:
+    Description: 'ARN of the Lambda function for async endpoint integration'
+    Value: !GetAtt LambdaFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaArn'
+
+  LambdaFunctionName:
+    Description: 'Name of the Lambda function for async endpoint integration'
+    Value: !Ref LambdaFunction
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaName'
+
+  # SSM Parameter Outputs
+  LambdaArnParameterName:
+    Description: 'SSM Parameter Store name containing the Lambda function ARN'
+    Value: '/protein-agent/lambda-function-arn'
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaArnParameter'
+
+  # IAM Role Outputs
+  SageMakerExecutionRoleArn:
+    Description: 'ARN of the SageMaker execution role'
+    Value: !GetAtt SageMakerExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-SageMakerRoleArn'
+
+  LambdaExecutionRoleArn:
+    Description: 'ARN of the Lambda execution role'
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaRoleArn'
+
+  # Model Outputs
+  ModelName:
+    Description: 'Name of the created SageMaker model'
+    Value: 'amplify-vep-model'
+    Export:
+      Name: !Sub '${AWS::StackName}-ModelName'
+
+  # Configuration Outputs
+  InstanceType:
+    Description: 'EC2 instance type used for the SageMaker endpoint'
+    Value: !Ref InstanceType
+    Export:
+      Name: !Sub '${AWS::StackName}-InstanceType'
+
+  ModelId:
+    Description: 'AMPLIFY model ID used for inference'
+    Value: !Ref ModelId
+    Export:
+      Name: !Sub '${AWS::StackName}-ModelId'
+
+  MaxConcurrentInvocations:
+    Description: 'Maximum concurrent invocations per instance configured'
+    Value: !Ref MaxConcurrentInvocations
+    Export:
+      Name: !Sub '${AWS::StackName}-MaxConcurrentInvocations'
+
+  # Auto Scaling Outputs (conditional)
+  AutoScalingEnabled:
+    Description: 'Whether auto scaling is enabled'
+    Value: !Ref EnableAutoScaling
+    Export:
+      Name: !Sub '${AWS::StackName}-AutoScalingEnabled'
+
+  MinCapacity:
+    Description: 'Minimum capacity configured for auto scaling'
+    Value: !Ref MinCapacity
+    Export:
+      Name: !Sub '${AWS::StackName}-MinCapacity'
+
+  MaxCapacity:
+    Description: 'Maximum capacity configured for auto scaling'
+    Value: !Ref MaxCapacity
+    Export:
+      Name: !Sub '${AWS::StackName}-MaxCapacity'
