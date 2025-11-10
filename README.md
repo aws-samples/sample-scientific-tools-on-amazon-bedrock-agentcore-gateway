@@ -49,6 +49,7 @@ cd cloudformation/scripts
 ```
 
 The deployment script will:
+
 1. Validate all CloudFormation templates
 2. Deploy the VEP Endpoint stack (SageMaker + Lambda)
 3. Deploy the Cognito stack (authentication)
@@ -72,6 +73,7 @@ npx @modelcontextprotocol/inspector
 ```
 
 Configure the Inspector interface:
+
 - Transport Type: Select Streamable HTTP
 - URL: Enter the Gateway URL from deployment outputs
 - Authentication:
@@ -95,6 +97,7 @@ Configure the Inspector interface:
 The deployment can be customized using parameter files in `cloudformation/parameters/`:
 
 **VEP Endpoint Parameters** (`vep-parameters.json`):
+
 - `ProjectName`: Project identifier (default: `protein-engineering`)
 - `InstanceType`: EC2 instance type (default: `ml.g6.2xlarge`)
 - `ModelId`: HuggingFace model identifier (default: `chandar-lab/AMPLIFY_350M`)
@@ -104,12 +107,14 @@ The deployment can be customized using parameter files in `cloudformation/parame
 - `EnableAutoScaling`: Enable auto-scaling (default: `true`)
 
 **Cognito Parameters** (`cognito-parameters.json`):
+
 - `UserPoolName`: Cognito user pool name
 - `ResourceServerIdentifier`: OAuth resource server identifier
 - `ClientName`: OAuth client name
 - `MinPasswordLength`: Minimum password length (default: `12`)
 
 **Gateway Parameters** (`gateway-parameters.json`):
+
 - `GatewayName`: AgentCore Gateway name
 - `GatewayDescription`: Gateway description
 

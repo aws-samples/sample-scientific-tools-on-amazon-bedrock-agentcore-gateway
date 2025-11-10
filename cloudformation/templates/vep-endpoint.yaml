@@ -158,12 +158,32 @@ Parameters:
     # Set to 'false' to maintain fixed capacity (useful for testing)
     # Set to 'true' for production to optimize costs and handle variable load
 
+  # ----------------------------------------------------------------------------
+  # S3 Configuration
+  # ----------------------------------------------------------------------------
+  AsyncInferenceBucketName:
+    Type: String
+    Default: ''
+    Description: 'Existing S3 bucket name for async inference (leave empty to create new bucket)'
+    MaxLength: 63
+    # If provided, CloudFormation will use this existing bucket
+    # If empty, CloudFormation will create a new bucket with auto-generated name
+
 # ============================================================================
 # CONDITIONS
 # ============================================================================
 Conditions:
   # Controls whether auto-scaling resources are created
   AutoScalingEnabled: !Equals [!Ref EnableAutoScaling, 'true']
+  
+  # Controls whether to create a new S3 bucket or use existing one
+  CreateBucket: !Equals [!Ref AsyncInferenceBucketName, '']
+
+# ============================================================================
+# MAPPINGS AND HELPERS
+# ============================================================================
+# Helper function to get bucket name (either created or provided)
+# Use: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
 
 # ============================================================================
 # RESOURCES
@@ -317,6 +337,7 @@ Resources:
 
   AsyncInferenceBucket:
     Type: AWS::S3::Bucket
+    Condition: CreateBucket
     # Purpose: Stores async inference input/output data and model artifacts
     # Prefixes: async-inference-input/, async-inference-output/, async-inference-failures/
     # Security: Encrypted at rest, public access blocked, SSL required
@@ -343,8 +364,10 @@ Resources:
 
   AsyncInferenceBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: CreateBucket
     # Purpose: Enforces SSL/TLS for all S3 operations (security best practice)
     # Denies any request that doesn't use HTTPS
+    # Only created when CloudFormation creates the bucket
     Properties:
       Bucket: !Ref AsyncInferenceBucket
       PolicyDocument:
@@ -380,22 +403,34 @@ Resources:
           - Effect: Allow
             Action:
               - 's3:ListBucket'
-            Resource: !GetAtt AsyncInferenceBucket.Arn
+            Resource: !Sub 
+              - 'arn:aws:s3:::${BucketName}'
+              - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
           - Effect: Allow
             Action:
               - 's3:GetObject'
               - 's3:PutObject'
               - 's3:DeleteObject'
             Resource:
-              - !Sub '${AsyncInferenceBucket.Arn}/async-inference-input/*'
-              - !Sub '${AsyncInferenceBucket.Arn}/async-inference-output/*'
-              - !Sub '${AsyncInferenceBucket.Arn}/async-inference-failures/*'
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}/async-inference-input/*'
+                - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}/async-inference-output/*'
+                - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}/async-inference-failures/*'
+                - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
           - Effect: Allow
             Action:
               - 's3:GetObject'
             Resource:
-              - !Sub '${AsyncInferenceBucket.Arn}/model-artifacts/*'
-              - !Sub '${AsyncInferenceBucket.Arn}/inference-code/*'
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}/model-artifacts/*'
+                - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}/inference-code/*'
+                - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
       Roles:
         - !Ref SageMakerExecutionRole
 
@@ -411,17 +446,25 @@ Resources:
           - Effect: Allow
             Action:
               - 's3:ListBucket'
-            Resource: !GetAtt AsyncInferenceBucket.Arn
+            Resource: !Sub 
+              - 'arn:aws:s3:::${BucketName}'
+              - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
           - Effect: Allow
             Action:
               - 's3:PutObject'
-            Resource: !Sub '${AsyncInferenceBucket.Arn}/async-inference-input/*'
+            Resource: !Sub 
+              - 'arn:aws:s3:::${BucketName}/async-inference-input/*'
+              - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
           - Effect: Allow
             Action:
               - 's3:GetObject'
             Resource:
-              - !Sub '${AsyncInferenceBucket.Arn}/async-inference-output/*'
-              - !Sub '${AsyncInferenceBucket.Arn}/async-inference-failures/*'
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}/async-inference-output/*'
+                - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
+              - !Sub 
+                - 'arn:aws:s3:::${BucketName}/async-inference-failures/*'
+                - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
       Roles:
         - !Ref LambdaExecutionRole
 
@@ -444,7 +487,9 @@ Resources:
       ExecutionRoleArn: !GetAtt SageMakerExecutionRole.Arn
       PrimaryContainer:
         Image: !Sub '763104351884.dkr.ecr.${AWS::Region}.amazonaws.com/pytorch-inference:2.6.0-gpu-py312-cu124-ubuntu22.04-sagemaker'
-        ModelDataUrl: !Sub 's3://${AsyncInferenceBucket}/inference-code/inference_code.tar.gz'
+        ModelDataUrl: !Sub 
+          - 's3://${BucketName}/inference-code/inference_code.tar.gz'
+          - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
         Environment:
           AMPLIFY_MODEL_ID: !Ref ModelId
           SAGEMAKER_PROGRAM: 'inference.py'
@@ -484,8 +529,12 @@ Resources:
           ModelDataDownloadTimeoutInSeconds: 900
       AsyncInferenceConfig:
         OutputConfig:
-          S3OutputPath: !Sub 's3://${AsyncInferenceBucket}/async-inference-output/'
-          S3FailurePath: !Sub 's3://${AsyncInferenceBucket}/async-inference-failures/'
+          S3OutputPath: !Sub 
+            - 's3://${BucketName}/async-inference-output/'
+            - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
+          S3FailurePath: !Sub 
+            - 's3://${BucketName}/async-inference-failures/'
+            - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
         ClientConfig:
           MaxConcurrentInvocationsPerInstance: !Ref MaxConcurrentInvocations
       Tags:
@@ -552,7 +601,7 @@ Resources:
       Environment:
         Variables:
           SAGEMAKER_ENDPOINT_NAME: 'amplify-vep-endpoint'
-          S3_BUCKET_NAME: !Ref AsyncInferenceBucket
+          S3_BUCKET_NAME: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
           S3_INPUT_PREFIX: 'async-inference-input/'
           S3_OUTPUT_PREFIX: 'async-inference-output/'
           S3_FAILURE_PREFIX: 'async-inference-failures/'
@@ -731,25 +780,31 @@ Outputs:
   # S3 Bucket Outputs
   BucketName:
     Description: 'S3 bucket name for async inference I/O'
-    Value: !Ref AsyncInferenceBucket
+    Value: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
     Export:
       Name: !Sub '${AWS::StackName}-BucketName'
 
   BucketArn:
     Description: 'S3 bucket ARN for async inference I/O'
-    Value: !GetAtt AsyncInferenceBucket.Arn
+    Value: !Sub 
+      - 'arn:aws:s3:::${BucketName}'
+      - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
     Export:
       Name: !Sub '${AWS::StackName}-BucketArn'
 
   AsyncInferenceInputPath:
     Description: 'S3 path for async inference input files'
-    Value: !Sub 's3://${AsyncInferenceBucket}/async-inference-input/'
+    Value: !Sub 
+      - 's3://${BucketName}/async-inference-input/'
+      - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
     Export:
       Name: !Sub '${AWS::StackName}-InputPath'
 
   AsyncInferenceOutputPath:
     Description: 'S3 path for async inference output files'
-    Value: !Sub 's3://${AsyncInferenceBucket}/async-inference-output/'
+    Value: !Sub 
+      - 's3://${BucketName}/async-inference-output/'
+      - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
     Export:
       Name: !Sub '${AWS::StackName}-OutputPath'
 

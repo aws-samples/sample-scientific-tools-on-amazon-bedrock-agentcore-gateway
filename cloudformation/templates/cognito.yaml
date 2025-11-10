@@ -181,10 +181,13 @@ Resources:
   UserPoolDomain:
     Type: AWS::Cognito::UserPoolDomain
     # Purpose: Creates OAuth2 endpoints for token exchange
-    # Domain Format: {project}-{stack}-{account} for uniqueness
+    # Domain Format: {region}{stack-id-prefix} for uniqueness (e.g., us-west-2abc123)
     # Endpoints: /oauth2/token, /oauth2/authorize, etc.
     Properties:
-      Domain: !Sub '${ProjectName}-${AWS::StackName}-${AWS::AccountId}'
+      Domain: !Join
+        - ""
+        - - !Ref "AWS::Region"
+          - !Select [0, !Split ["-", !Select [2, !Split ["/", !Ref "AWS::StackId"]]]]
       UserPoolId: !Ref UserPool
 
   # ----------------------------------------------------------------------------
