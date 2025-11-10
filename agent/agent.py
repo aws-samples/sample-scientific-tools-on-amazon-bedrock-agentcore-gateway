@@ -37,32 +37,31 @@ with gateway_client:
         callback_handler=None,
     )
 
+
 @app.entrypoint
-async def main(payload):
+async def strands_agent_bedrock(payload):
     """
     Invoke the agent with a payload
     """
-
     user_input = payload.get("prompt")
-    with gateway_client:
-        agent_stream = agent.stream_async(user_input)
-        tool_name = None
-        print("foo")
-        try:
-            async for event in agent_stream:
+    print("User input:", user_input)
+    try:
+        async for event in agent.stream_async(user_input):
 
-                if (
-                    "current_tool_use" in event
-                    and event["current_tool_use"].get("name") != tool_name
-                ):
-                    tool_name = event["current_tool_use"]["name"]
-                    yield f"\n\n🔧 Using tool: {tool_name}\n\n"
+            # Print tool use
+            for content in event.get("message", {}).get("content", []):
+                if tool_use := content.get("toolUse"):
+                    yield "\n"
+                    yield f"🔧 Using tool: {tool_use['name']}"
+                    for k, v in tool_use["input"].items():
+                        yield f"**{k}**: {v}\n"
+                    yield "\n"
 
-                if "data" in event:
-                    tool_name = None
-                    yield event["data"]
-        except Exception as e:
-            yield f"Error: {str(e)}"
+            # Print event data
+            if "data" in event:
+                yield event["data"]
+    except Exception as e:
+        yield f"Error: {str(e)}"
 
 
 if __name__ == "__main__":
