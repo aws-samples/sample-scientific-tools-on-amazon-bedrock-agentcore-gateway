@@ -24,3 +24,5 @@ htmlcov
 
 # CloudFormation outputs
 *.out
+
+.agent
