@@ -3,8 +3,8 @@
 ################################################################################
 # Package and Upload Artifacts Script
 # 
-# This script packages the Lambda function code and SageMaker inference code
-# and uploads them to S3 for CloudFormation deployment.
+# This script packages the Lambda function code, SageMaker inference code,
+# and agent code, then uploads them to S3 for CloudFormation deployment.
 #
 # Usage:
 #   ./package-artifacts.sh --project-name NAME --region REGION
@@ -81,39 +81,24 @@ get_account_id() {
     aws sts get-caller-identity --query Account --output text --region "$AWS_REGION"
 }
 
-# Create S3 buckets if they don't exist
-create_buckets() {
+# Create S3 bucket if it doesn't exist
+create_bucket() {
     local account_id=$(get_account_id)
-    LAMBDA_BUCKET="${PROJECT_NAME}-lambda-code-${account_id}"
-    INFERENCE_BUCKET="${PROJECT_NAME}-async-inference-${account_id}"
+    ARTIFACTS_BUCKET="${PROJECT_NAME}-artifacts-${account_id}"
     
-    print_info "Checking S3 buckets..."
+    print_info "Checking S3 bucket..."
     
-    # Create Lambda code bucket (this is separate from CloudFormation)
-    if aws s3 ls "s3://${LAMBDA_BUCKET}" --region "$AWS_REGION" 2>/dev/null; then
-        print_info "Lambda code bucket already exists: ${LAMBDA_BUCKET}"
+    # Create single artifacts bucket for all code
+    if aws s3 ls "s3://${ARTIFACTS_BUCKET}" --region "$AWS_REGION" 2>/dev/null; then
+        print_info "Artifacts bucket already exists: ${ARTIFACTS_BUCKET}"
     else
-        print_info "Creating Lambda code bucket: ${LAMBDA_BUCKET}"
+        print_info "Creating artifacts bucket: ${ARTIFACTS_BUCKET}"
         if [[ "$AWS_REGION" == "us-east-1" ]]; then
-            aws s3 mb "s3://${LAMBDA_BUCKET}" --region "$AWS_REGION"
+            aws s3 mb "s3://${ARTIFACTS_BUCKET}" --region "$AWS_REGION"
         else
-            aws s3api create-bucket --bucket "${LAMBDA_BUCKET}" --region "$AWS_REGION" --create-bucket-configuration LocationConstraint="$AWS_REGION"
+            aws s3api create-bucket --bucket "${ARTIFACTS_BUCKET}" --region "$AWS_REGION" --create-bucket-configuration LocationConstraint="$AWS_REGION"
         fi
-        print_success "Lambda code bucket created"
-    fi
-    
-    # Inference bucket will be created by CloudFormation or should already exist
-    if ! aws s3 ls "s3://${INFERENCE_BUCKET}" --region "$AWS_REGION" 2>/dev/null; then
-        print_warning "Inference bucket does not exist: ${INFERENCE_BUCKET}"
-        print_warning "Creating it now (CloudFormation will adopt it)"
-        if [[ "$AWS_REGION" == "us-east-1" ]]; then
-            aws s3 mb "s3://${INFERENCE_BUCKET}" --region "$AWS_REGION"
-        else
-            aws s3api create-bucket --bucket "${INFERENCE_BUCKET}" --region "$AWS_REGION" --create-bucket-configuration LocationConstraint="$AWS_REGION"
-        fi
-        print_success "Inference bucket created"
-    else
-        print_info "Inference bucket already exists: ${INFERENCE_BUCKET}"
+        print_success "Artifacts bucket created"
     fi
 }
 
@@ -159,15 +144,37 @@ package_inference_code() {
     print_success "Inference code packaged: $INFERENCE_TAR"
 }
 
+# Package agent code
+package_agent_code() {
+    print_info "Packaging agent code..."
+    
+    local agent_dir="${PROJECT_ROOT}/agent"
+    AGENT_ZIP=$(mktemp).zip
+    
+    # Check if agent directory exists
+    if [[ ! -d "$agent_dir" ]]; then
+        error_exit "Agent directory not found: $agent_dir"
+    fi
+    
+    # Create zip file
+    (cd "$agent_dir" && zip -r "$AGENT_ZIP" . -x "*.pyc" -x "__pycache__/*" -x "*.md" -x ".DS_Store" -x "*.log" -x "test_*" -x "*_test.py" -x "tests/*") > /dev/null
+    
+    print_success "Agent code packaged: $AGENT_ZIP"
+}
+
 # Upload artifacts to S3
 upload_artifacts() {
     print_info "Uploading Lambda code to S3..."
-    aws s3 cp "$LAMBDA_ZIP" "s3://${LAMBDA_BUCKET}/lambda_function.zip" --region "$AWS_REGION"
-    print_success "Lambda code uploaded to s3://${LAMBDA_BUCKET}/lambda_function.zip"
+    aws s3 cp "$LAMBDA_ZIP" "s3://${ARTIFACTS_BUCKET}/lambda/lambda_function.zip" --region "$AWS_REGION"
+    print_success "Lambda code uploaded to s3://${ARTIFACTS_BUCKET}/lambda/lambda_function.zip"
+    
+    print_info "Uploading agent code to S3..."
+    aws s3 cp "$AGENT_ZIP" "s3://${ARTIFACTS_BUCKET}/agent/agent.zip" --region "$AWS_REGION"
+    print_success "Agent code uploaded to s3://${ARTIFACTS_BUCKET}/agent/agent.zip"
     
     print_info "Uploading inference code to S3..."
-    aws s3 cp "$INFERENCE_TAR" "s3://${INFERENCE_BUCKET}/inference-code/inference_code.tar.gz" --region "$AWS_REGION"
-    print_success "Inference code uploaded to s3://${INFERENCE_BUCKET}/inference-code/inference_code.tar.gz"
+    aws s3 cp "$INFERENCE_TAR" "s3://${ARTIFACTS_BUCKET}/inference/inference_code.tar.gz" --region "$AWS_REGION"
+    print_success "Inference code uploaded to s3://${ARTIFACTS_BUCKET}/inference/inference_code.tar.gz"
 }
 
 # Main execution
@@ -183,24 +190,27 @@ main() {
     print_info "AWS Region: $AWS_REGION"
     echo ""
     
-    # Create buckets (sets LAMBDA_BUCKET and INFERENCE_BUCKET)
-    create_buckets
+    # Create bucket (sets ARTIFACTS_BUCKET)
+    create_bucket
     
-    # Package artifacts (sets LAMBDA_ZIP and INFERENCE_TAR)
+    # Package artifacts (sets LAMBDA_ZIP, AGENT_ZIP, and INFERENCE_TAR)
     package_lambda_code
+    package_agent_code
     package_inference_code
     
     # Upload to S3
     upload_artifacts
     
     # Cleanup temp files
-    rm -f "$LAMBDA_ZIP" "$INFERENCE_TAR"
+    rm -f "$LAMBDA_ZIP" "$AGENT_ZIP" "$INFERENCE_TAR"
     
     echo ""
     print_success "All artifacts packaged and uploaded successfully!"
     echo ""
-    print_info "Lambda code: s3://${LAMBDA_BUCKET}/lambda_function.zip"
-    print_info "Inference code: s3://${INFERENCE_BUCKET}/inference-code/inference_code.tar.gz"
+    print_info "Artifacts bucket: s3://${ARTIFACTS_BUCKET}"
+    print_info "  - Lambda code: lambda/lambda_function.zip"
+    print_info "  - Agent code: agent/agent.zip"
+    print_info "  - Inference code: inference/inference_code.tar.gz"
 }
 
 main "$@"

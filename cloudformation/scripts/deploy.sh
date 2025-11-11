@@ -307,41 +307,26 @@ wait_for_stack() {
     fi
 }
 
-# Create S3 buckets and upload artifacts
+# Create S3 bucket and upload artifacts
 prepare_artifacts() {
     print_header "Preparing Artifacts"
     
     local account_id=$(aws sts get-caller-identity --query Account --output text --region "$AWS_REGION")
-    LAMBDA_BUCKET="${PROJECT_NAME}-lambda-code-${account_id}"
-    INFERENCE_BUCKET="${PROJECT_NAME}-async-inference-${account_id}"
+    ARTIFACTS_BUCKET="${PROJECT_NAME}-artifacts-${account_id}"
     
-    print_info "Lambda bucket: $LAMBDA_BUCKET"
-    print_info "Inference bucket: $INFERENCE_BUCKET"
+    print_info "Artifacts bucket: $ARTIFACTS_BUCKET"
     
-    # Create Lambda code bucket
-    if aws s3 ls "s3://${LAMBDA_BUCKET}" --region "$AWS_REGION" 2>/dev/null; then
-        print_info "Lambda code bucket already exists"
+    # Create single artifacts bucket
+    if aws s3 ls "s3://${ARTIFACTS_BUCKET}" --region "$AWS_REGION" 2>/dev/null; then
+        print_info "Artifacts bucket already exists"
     else
-        print_info "Creating Lambda code bucket..."
+        print_info "Creating artifacts bucket..."
         if [[ "$AWS_REGION" == "us-east-1" ]]; then
-            aws s3 mb "s3://${LAMBDA_BUCKET}" --region "$AWS_REGION"
+            aws s3 mb "s3://${ARTIFACTS_BUCKET}" --region "$AWS_REGION"
         else
-            aws s3api create-bucket --bucket "${LAMBDA_BUCKET}" --region "$AWS_REGION" --create-bucket-configuration LocationConstraint="$AWS_REGION"
+            aws s3api create-bucket --bucket "${ARTIFACTS_BUCKET}" --region "$AWS_REGION" --create-bucket-configuration LocationConstraint="$AWS_REGION"
         fi
-        print_success "Lambda code bucket created"
-    fi
-    
-    # Create inference bucket
-    if aws s3 ls "s3://${INFERENCE_BUCKET}" --region "$AWS_REGION" 2>/dev/null; then
-        print_info "Inference bucket already exists"
-    else
-        print_info "Creating inference bucket..."
-        if [[ "$AWS_REGION" == "us-east-1" ]]; then
-            aws s3 mb "s3://${INFERENCE_BUCKET}" --region "$AWS_REGION"
-        else
-            aws s3api create-bucket --bucket "${INFERENCE_BUCKET}" --region "$AWS_REGION" --create-bucket-configuration LocationConstraint="$AWS_REGION"
-        fi
-        print_success "Inference bucket created"
+        print_success "Artifacts bucket created"
     fi
     
     # Package and upload artifacts
@@ -358,7 +343,7 @@ deploy_vep_stack() {
     print_info "Region: $AWS_REGION"
     print_info "Instance Type: $INSTANCE_TYPE"
     print_info "Auto-scaling: $ENABLE_AUTOSCALING (Min: $MIN_CAPACITY, Max: $MAX_CAPACITY)"
-    print_info "Using existing bucket: $INFERENCE_BUCKET"
+    print_info "Using artifacts bucket: $ARTIFACTS_BUCKET"
     
     local stack_status=$(get_stack_status "$VEP_STACK_NAME")
     
@@ -374,7 +359,7 @@ deploy_vep_stack() {
                 ParameterKey=MinCapacity,ParameterValue="$MIN_CAPACITY" \
                 ParameterKey=MaxCapacity,ParameterValue="$MAX_CAPACITY" \
                 ParameterKey=EnableAutoScaling,ParameterValue="$ENABLE_AUTOSCALING" \
-                ParameterKey=AsyncInferenceBucketName,ParameterValue="$INFERENCE_BUCKET" \
+                ParameterKey=AsyncInferenceBucketName,ParameterValue="$ARTIFACTS_BUCKET" \
             --capabilities CAPABILITY_NAMED_IAM \
             --region "$AWS_REGION" \
             --tags \
