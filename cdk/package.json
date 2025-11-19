@@ -1,0 +1,36 @@
+{
+  "name": "protein-engineering-gateway-cdk",
+  "version": "1.0.0",
+  "description": "CDK TypeScript implementation for Protein Engineering Gateway Stack",
+  "main": "lib/gateway-stack.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy",
+    "diff": "cdk diff",
+    "destroy": "cdk destroy"
+  },
+  "keywords": [
+    "aws",
+    "cdk",
+    "bedrock",
+    "agentcore",
+    "gateway",
+    "mcp"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "aws-cdk": "^2.170.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.170.0",
+    "constructs": "^10.0.0",
+    "source-map-support": "^0.5.21"
+  }
+}
