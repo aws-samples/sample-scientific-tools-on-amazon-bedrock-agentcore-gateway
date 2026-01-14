@@ -44,8 +44,7 @@ uv sync
 Deploy all infrastructure using the CloudFormation deployment script:
 
 ```bash
-cd cloudformation/scripts
-./deploy.sh --project-name protein-engineering --region us-east-1
+./scripts/deploy.sh --project-name protein-engineering --region us-east-1
 ```
 
 The deployment script will:
@@ -92,7 +91,9 @@ npx @modelcontextprotocol/inspector
    - Enter the **output_id** and select **Run Tool**
    - Wait for prediction completion (may take several minutes for first request)
 
-#### Test with Quick Suiter
+#### Test with Quick Suite
+
+![Predict protein variant effects in Quick Suite](img/quick-suite.png "Quick Suite Variant Effect Prediction")
 
 Amazon Quick Suite supports MCP integrations as Actions. To add your AgentCore Gateway:
 
@@ -293,8 +294,7 @@ Edit parameter files in `cloudformation/parameters/` before deployment:
 vi cloudformation/parameters/vep-parameters.json
 
 # Deploy with custom parameters
-cd cloudformation/scripts
-./deploy.sh --project-name my-project --region us-west-2
+./scripts/deploy.sh --project-name my-project --region us-west-2
 ```
 
 ### Integration with CI/CD
@@ -303,8 +303,7 @@ cd cloudformation/scripts
 # GitHub Actions example
 - name: Deploy CloudFormation Stacks
   run: |
-    cd cloudformation/scripts
-    ./deploy.sh \
+    ./scripts/deploy.sh \
       --project-name ${{ github.event.repository.name }} \
       --region us-east-1 \
       --instance-type ml.g6.2xlarge

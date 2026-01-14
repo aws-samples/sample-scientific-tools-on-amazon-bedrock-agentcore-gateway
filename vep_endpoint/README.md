@@ -45,8 +45,7 @@ Configuration is managed through CloudFormation parameters. Edit `cloudformation
 
 ```bash
 # Deploy with custom parameters
-cd cloudformation/scripts
-./deploy.sh \
+./scripts/deploy.sh \
   --instance-type ml.g6.4xlarge \
   --min-capacity 1 \
   --max-capacity 5 \
@@ -72,11 +71,10 @@ The VEP endpoint is deployed using CloudFormation templates. See the main projec
 
 ```bash
 # Deploy all infrastructure
-cd cloudformation/scripts
-./deploy.sh --region us-east-1
+./scripts/deploy.sh --region us-east-1
 
 # Or deploy with custom configuration
-./deploy.sh --instance-type ml.g6.4xlarge --min-capacity 1 --max-capacity 10
+./scripts/deploy.sh --instance-type ml.g6.4xlarge --min-capacity 1 --max-capacity 10
 ```
 
 ## Usage Examples

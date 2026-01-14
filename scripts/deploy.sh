@@ -29,7 +29,8 @@ set -o pipefail  # Exit on pipe failure
 
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CLOUDFORMATION_DIR="$(dirname "$SCRIPT_DIR")"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+CLOUDFORMATION_DIR="${PROJECT_ROOT}/cloudformation"
 TEMPLATES_DIR="${CLOUDFORMATION_DIR}/templates"
 PARAMETERS_DIR="${CLOUDFORMATION_DIR}/parameters"
 
