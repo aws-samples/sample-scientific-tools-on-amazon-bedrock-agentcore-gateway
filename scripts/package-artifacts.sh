@@ -144,33 +144,11 @@ package_inference_code() {
     print_success "Inference code packaged: $INFERENCE_TAR"
 }
 
-# Package agent code
-package_agent_code() {
-    print_info "Packaging agent code..."
-    
-    local agent_dir="${PROJECT_ROOT}/agent"
-    AGENT_ZIP=$(mktemp).zip
-    
-    # Check if agent directory exists
-    if [[ ! -d "$agent_dir" ]]; then
-        error_exit "Agent directory not found: $agent_dir"
-    fi
-    
-    # Create zip file
-    (cd "$agent_dir" && zip -r "$AGENT_ZIP" . -x "*.pyc" -x "__pycache__/*" -x "*.md" -x ".DS_Store" -x "*.log" -x "test_*" -x "*_test.py" -x "tests/*") > /dev/null
-    
-    print_success "Agent code packaged: $AGENT_ZIP"
-}
-
 # Upload artifacts to S3
 upload_artifacts() {
     print_info "Uploading Lambda code to S3..."
     aws s3 cp "$LAMBDA_ZIP" "s3://${ARTIFACTS_BUCKET}/lambda/lambda_function.zip" --region "$AWS_REGION"
     print_success "Lambda code uploaded to s3://${ARTIFACTS_BUCKET}/lambda/lambda_function.zip"
-    
-    print_info "Uploading agent code to S3..."
-    aws s3 cp "$AGENT_ZIP" "s3://${ARTIFACTS_BUCKET}/agent/agent.zip" --region "$AWS_REGION"
-    print_success "Agent code uploaded to s3://${ARTIFACTS_BUCKET}/agent/agent.zip"
     
     print_info "Uploading inference code to S3..."
     aws s3 cp "$INFERENCE_TAR" "s3://${ARTIFACTS_BUCKET}/inference-code/inference_code.tar.gz" --region "$AWS_REGION"
@@ -193,24 +171,22 @@ main() {
     # Create bucket (sets ARTIFACTS_BUCKET)
     create_bucket
     
-    # Package artifacts (sets LAMBDA_ZIP, AGENT_ZIP, and INFERENCE_TAR)
+    # Package artifacts (sets LAMBDA_ZIP and INFERENCE_TAR)
     package_lambda_code
-    package_agent_code
     package_inference_code
     
     # Upload to S3
     upload_artifacts
     
     # Cleanup temp files
-    rm -f "$LAMBDA_ZIP" "$AGENT_ZIP" "$INFERENCE_TAR"
+    rm -f "$LAMBDA_ZIP" "$INFERENCE_TAR"
     
     echo ""
     print_success "All artifacts packaged and uploaded successfully!"
     echo ""
     print_info "Artifacts bucket: s3://${ARTIFACTS_BUCKET}"
     print_info "  - Lambda code: lambda/lambda_function.zip"
-    print_info "  - Agent code: agent/agent.zip"
-    print_info "  - Inference code: inference/inference_code.tar.gz"
+    print_info "  - Inference code: inference-code/inference_code.tar.gz"
 }
 
 main "$@"
