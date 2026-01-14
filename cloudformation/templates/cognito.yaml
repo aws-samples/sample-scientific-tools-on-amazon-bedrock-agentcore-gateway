@@ -1,5 +1,5 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Cognito Stack - User authentication and authorization infrastructure for AgentCore Gateway'
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Cognito Stack - User authentication and authorization infrastructure for AgentCore Gateway"
 
 # ============================================================================
 # TEMPLATE OVERVIEW
@@ -28,33 +28,33 @@ Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
-          default: 'Project Configuration'
+          default: "Project Configuration"
         Parameters:
           - ProjectName
       - Label:
-          default: 'Cognito User Pool Configuration'
+          default: "Cognito User Pool Configuration"
         Parameters:
           - UserPoolName
           - MinPasswordLength
           - RequireSymbols
       - Label:
-          default: 'OAuth Configuration'
+          default: "OAuth Configuration"
         Parameters:
           - ResourceServerIdentifier
           - ClientName
     ParameterLabels:
       ProjectName:
-        default: 'Project Name'
+        default: "Project Name"
       UserPoolName:
-        default: 'User Pool Name'
+        default: "User Pool Name"
       ResourceServerIdentifier:
-        default: 'Resource Server Identifier'
+        default: "Resource Server Identifier"
       ClientName:
-        default: 'Client Name'
+        default: "Client Name"
       MinPasswordLength:
-        default: 'Minimum Password Length'
+        default: "Minimum Password Length"
       RequireSymbols:
-        default: 'Require Symbols in Password'
+        default: "Require Symbols in Password"
 
 # ============================================================================
 # PARAMETERS
@@ -68,57 +68,57 @@ Parameters:
   # ----------------------------------------------------------------------------
   ProjectName:
     Type: String
-    Default: 'protein-engineering'
-    Description: 'Project name used for resource naming and tagging'
+    Default: "protein-engineering"
+    Description: "Project name used for resource naming and tagging"
     MinLength: 1
     MaxLength: 64
-    AllowedPattern: '^[a-z0-9-]+$'
-    ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
+    AllowedPattern: "^[a-z0-9-]+$"
+    ConstraintDescription: "Must contain only lowercase letters, numbers, and hyphens"
 
   # ----------------------------------------------------------------------------
   # Cognito User Pool Configuration
   # ----------------------------------------------------------------------------
   UserPoolName:
     Type: String
-    Default: 'agentcore-gateway-pool'
-    Description: 'Name for the Cognito User Pool'
+    Default: "agentcore-gateway-pool"
+    Description: "Name for the Cognito User Pool"
     MinLength: 1
     MaxLength: 128
     AllowedPattern: '^[\w\s+=,.@-]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters, spaces, and allowed special characters'
+    ConstraintDescription: "Must contain only alphanumeric characters, spaces, and allowed special characters"
 
   ResourceServerIdentifier:
     Type: String
-    Default: 'agentcore-gateway'
-    Description: 'Identifier for the Cognito Resource Server'
+    Default: "agentcore-gateway"
+    Description: "Identifier for the Cognito Resource Server"
     MinLength: 1
     MaxLength: 256
     AllowedPattern: '^[\x21\x23-\x5B\x5D-\x7E]+$'
-    ConstraintDescription: 'Must be a valid URI format'
+    ConstraintDescription: "Must be a valid URI format"
 
   ClientName:
     Type: String
-    Default: 'agentcore-gateway-client'
-    Description: 'Name for the Cognito User Pool Client'
+    Default: "agentcore-gateway-client"
+    Description: "Name for the Cognito User Pool Client"
     MinLength: 1
     MaxLength: 128
     AllowedPattern: '^[\w\s+=,.@-]+$'
-    ConstraintDescription: 'Must contain only alphanumeric characters, spaces, and allowed special characters'
+    ConstraintDescription: "Must contain only alphanumeric characters, spaces, and allowed special characters"
 
   MinPasswordLength:
     Type: Number
     Default: 12
-    Description: 'Minimum password length for user pool'
+    Description: "Minimum password length for user pool"
     MinValue: 6
     MaxValue: 99
 
   RequireSymbols:
     Type: String
-    Default: 'true'
-    Description: 'Require symbols in passwords'
+    Default: "true"
+    Description: "Require symbols in passwords"
     AllowedValues:
-      - 'true'
-      - 'false'
+      - "true"
+      - "false"
     # Password complexity requirement for enhanced security
 
 # ============================================================================
@@ -126,7 +126,7 @@ Parameters:
 # ============================================================================
 Conditions:
   # Controls whether symbols are required in passwords
-  RequireSymbolsCondition: !Equals [!Ref RequireSymbols, 'true']
+  RequireSymbolsCondition: !Equals [!Ref RequireSymbols, "true"]
 
 # ============================================================================
 # RESOURCES
@@ -146,7 +146,7 @@ Resources:
     # Username: Email-based for user identification
     Properties:
       UserPoolName: !Ref UserPoolName
-      MfaConfiguration: 'OFF'
+      MfaConfiguration: "OFF"
       UsernameAttributes:
         - email
       AutoVerifiedAttributes:
@@ -187,7 +187,10 @@ Resources:
       Domain: !Join
         - ""
         - - !Ref "AWS::Region"
-          - !Select [0, !Split ["-", !Select [2, !Split ["/", !Ref "AWS::StackId"]]]]
+          - !Select [
+              0,
+              !Split ["-", !Select [2, !Split ["/", !Ref "AWS::StackId"]]],
+            ]
       UserPoolId: !Ref UserPool
 
   # ----------------------------------------------------------------------------
@@ -204,14 +207,14 @@ Resources:
     Properties:
       UserPoolId: !Ref UserPool
       Identifier: !Ref ResourceServerIdentifier
-      Name: !Sub '${ProjectName}-resource-server'
+      Name: !Sub "${ProjectName}-resource-server"
       Scopes:
-        - ScopeName: 'read'
-          ScopeDescription: 'Read access to gateway resources'
-        - ScopeName: 'write'
-          ScopeDescription: 'Write access to gateway resources'
-        - ScopeName: 'admin'
-          ScopeDescription: 'Administrative access to gateway resources'
+        - ScopeName: "read"
+          ScopeDescription: "Read access to gateway resources"
+        - ScopeName: "write"
+          ScopeDescription: "Write access to gateway resources"
+        - ScopeName: "admin"
+          ScopeDescription: "Administrative access to gateway resources"
 
   # ----------------------------------------------------------------------------
   # COGNITO USER POOL CLIENT
@@ -234,9 +237,9 @@ Resources:
         - client_credentials
       AllowedOAuthFlowsUserPoolClient: true
       AllowedOAuthScopes:
-        - !Sub '${ResourceServerIdentifier}/read'
-        - !Sub '${ResourceServerIdentifier}/write'
-        - !Sub '${ResourceServerIdentifier}/admin'
+        - !Sub "${ResourceServerIdentifier}/read"
+        - !Sub "${ResourceServerIdentifier}/write"
+        - !Sub "${ResourceServerIdentifier}/admin"
       ExplicitAuthFlows:
         - ALLOW_REFRESH_TOKEN_AUTH
       PreventUserExistenceErrors: ENABLED
@@ -255,39 +258,39 @@ Resources:
     # Purpose: Allows Lambda to read Cognito client secret and write to Secrets Manager
     # Permissions: cognito-idp:DescribeUserPoolClient, secretsmanager:*
     Properties:
-      RoleName: !Sub '${ProjectName}-cognito-secret-lambda-role'
-      Description: 'Execution role for Lambda function that retrieves and stores Cognito client secret'
+      RoleName: !Sub "${ProjectName}-cognito-secret-lambda-role"
+      Description: "Execution role for Lambda function that retrieves and stores Cognito client secret"
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
-            Action: 'sts:AssumeRole'
+            Action: "sts:AssumeRole"
       ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
       Policies:
-        - PolicyName: 'CognitoClientSecretAccess'
+        - PolicyName: "CognitoClientSecretAccess"
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - 'cognito-idp:DescribeUserPoolClient'
+                  - "cognito-idp:DescribeUserPoolClient"
                 Resource: !GetAtt UserPool.Arn
-        - PolicyName: 'SecretsManagerAccess'
+        - PolicyName: "SecretsManagerAccess"
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - 'secretsmanager:CreateSecret'
-                  - 'secretsmanager:UpdateSecret'
-                  - 'secretsmanager:PutSecretValue'
-                  - 'secretsmanager:DeleteSecret'
-                  - 'secretsmanager:DescribeSecret'
-                  - 'secretsmanager:TagResource'
-                Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${ProjectName}/cognito/client-secret-*'
+                  - "secretsmanager:CreateSecret"
+                  - "secretsmanager:UpdateSecret"
+                  - "secretsmanager:PutSecretValue"
+                  - "secretsmanager:DeleteSecret"
+                  - "secretsmanager:DescribeSecret"
+                  - "secretsmanager:TagResource"
+                Resource: !Sub "arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${ProjectName}/cognito/client-secret-*"
       Tags:
         - Key: Project
           Value: !Ref ProjectName
@@ -300,8 +303,8 @@ Resources:
     # Operations: Create (store secret), Update (update secret), Delete (remove secret)
     # Response: Sends SUCCESS/FAILED to CloudFormation via cfnresponse
     Properties:
-      FunctionName: !Sub '${ProjectName}-cognito-client-secret'
-      Description: 'Custom resource Lambda to retrieve and store Cognito client secret'
+      FunctionName: !Sub "${ProjectName}-cognito-client-secret"
+      Description: "Custom resource Lambda to retrieve and store Cognito client secret"
       Runtime: python3.13
       Handler: index.lambda_handler
       Role: !GetAtt ClientSecretLambdaRole.Arn
@@ -313,13 +316,13 @@ Resources:
           import boto3
           import cfnresponse
           import logging
-          
+
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
-          
+
           cognito_client = boto3.client('cognito-idp')
           secrets_client = boto3.client('secretsmanager')
-          
+
           def lambda_handler(event, context):
               logger.info(f'Event: {json.dumps(event)}')
               
@@ -410,7 +413,7 @@ Resources:
       ServiceToken: !GetAtt ClientSecretLambda.Arn
       UserPoolId: !Ref UserPool
       ClientId: !Ref UserPoolClient
-      SecretName: !Sub '${ProjectName}/cognito/client-secret'
+      SecretName: !Sub "${ProjectName}/cognito/client-secret"
       ProjectName: !Ref ProjectName
 
   # ----------------------------------------------------------------------------
@@ -426,10 +429,10 @@ Resources:
     # Format: https://cognito-idp.{region}.amazonaws.com/{pool-id}/.well-known/openid-configuration
     # Used by: Gateway AuthorizerConfiguration.CustomJWTAuthorizer.DiscoveryUrl
     Properties:
-      Name: '/protein-agent/cognito/discovery-url'
-      Description: 'Cognito OIDC discovery URL for AgentCore Gateway'
+      Name: "/protein-agent/cognito/discovery-url"
+      Description: "Cognito OIDC discovery URL for AgentCore Gateway"
       Type: String
-      Value: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}/.well-known/openid-configuration'
+      Value: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}/.well-known/openid-configuration"
       Tier: Standard
       Tags:
         Project: !Ref ProjectName
@@ -440,8 +443,8 @@ Resources:
     # Purpose: Client ID for JWT validation in Gateway
     # Used by: Gateway AuthorizerConfiguration.CustomJWTAuthorizer.AllowedClients
     Properties:
-      Name: '/protein-agent/cognito/client-id'
-      Description: 'Cognito User Pool Client ID for AgentCore Gateway'
+      Name: "/protein-agent/cognito/client-id"
+      Description: "Cognito User Pool Client ID for AgentCore Gateway"
       Type: String
       Value: !Ref UserPoolClient
       Tier: Standard
@@ -452,8 +455,8 @@ Resources:
   UserPoolIdParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: '/protein-agent/cognito/user-pool-id'
-      Description: 'Cognito User Pool ID'
+      Name: "/protein-agent/cognito/user-pool-id"
+      Description: "Cognito User Pool ID"
       Type: String
       Value: !Ref UserPool
       Tier: Standard
@@ -464,8 +467,8 @@ Resources:
   UserPoolArnParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: '/protein-agent/cognito/user-pool-arn'
-      Description: 'Cognito User Pool ARN'
+      Name: "/protein-agent/cognito/user-pool-arn"
+      Description: "Cognito User Pool ARN"
       Type: String
       Value: !GetAtt UserPool.Arn
       Tier: Standard
@@ -476,10 +479,10 @@ Resources:
   DomainParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: '/protein-agent/cognito/domain'
-      Description: 'Cognito User Pool Domain URL'
+      Name: "/protein-agent/cognito/domain"
+      Description: "Cognito User Pool Domain URL"
       Type: String
-      Value: !Sub 'https://${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com'
+      Value: !Sub "https://${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com"
       Tier: Standard
       Tags:
         Project: !Ref ProjectName
@@ -496,91 +499,91 @@ Outputs:
   # User Pool Outputs
   # ----------------------------------------------------------------------------
   UserPoolId:
-    Description: 'Cognito User Pool ID'
+    Description: "Cognito User Pool ID"
     Value: !Ref UserPool
     Export:
-      Name: !Sub '${AWS::StackName}-UserPoolId'
+      Name: !Sub "${AWS::StackName}-UserPoolId"
 
   UserPoolArn:
-    Description: 'Cognito User Pool ARN'
+    Description: "Cognito User Pool ARN"
     Value: !GetAtt UserPool.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-UserPoolArn'
+      Name: !Sub "${AWS::StackName}-UserPoolArn"
 
   # Client Outputs
   ClientId:
-    Description: 'Cognito User Pool Client ID'
+    Description: "Cognito User Pool Client ID"
     Value: !Ref UserPoolClient
     Export:
-      Name: !Sub '${AWS::StackName}-ClientId'
+      Name: !Sub "${AWS::StackName}-ClientId"
 
   # Domain Outputs
   DiscoveryUrl:
-    Description: 'Cognito OIDC discovery URL'
-    Value: !Sub 'https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}/.well-known/openid-configuration'
+    Description: "Cognito OIDC discovery URL"
+    Value: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}/.well-known/openid-configuration"
     Export:
-      Name: !Sub '${AWS::StackName}-DiscoveryUrl'
+      Name: !Sub "${AWS::StackName}-DiscoveryUrl"
 
   DomainUrl:
-    Description: 'Cognito User Pool Domain URL'
-    Value: !Sub 'https://${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com'
+    Description: "Cognito User Pool Domain URL"
+    Value: !Sub "https://${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com"
     Export:
-      Name: !Sub '${AWS::StackName}-DomainUrl'
+      Name: !Sub "${AWS::StackName}-DomainUrl"
 
   TokenEndpoint:
-    Description: 'OAuth2 token endpoint URL'
-    Value: !Sub 'https://${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com/oauth2/token'
+    Description: "OAuth2 token endpoint URL"
+    Value: !Sub "https://${UserPoolDomain}.auth.${AWS::Region}.amazoncognito.com/oauth2/token"
     Export:
-      Name: !Sub '${AWS::StackName}-TokenEndpoint'
+      Name: !Sub "${AWS::StackName}-TokenEndpoint"
 
   # SSM Parameter Outputs
   DiscoveryUrlParameterName:
-    Description: 'SSM Parameter name for discovery URL'
-    Value: '/protein-agent/cognito/discovery-url'
+    Description: "SSM Parameter name for discovery URL"
+    Value: "/protein-agent/cognito/discovery-url"
     Export:
-      Name: !Sub '${AWS::StackName}-DiscoveryUrlParameter'
+      Name: !Sub "${AWS::StackName}-DiscoveryUrlParameter"
 
   ClientIdParameterName:
-    Description: 'SSM Parameter name for client ID'
-    Value: '/protein-agent/cognito/client-id'
+    Description: "SSM Parameter name for client ID"
+    Value: "/protein-agent/cognito/client-id"
     Export:
-      Name: !Sub '${AWS::StackName}-ClientIdParameter'
+      Name: !Sub "${AWS::StackName}-ClientIdParameter"
 
   UserPoolIdParameterName:
-    Description: 'SSM Parameter name for user pool ID'
-    Value: '/protein-agent/cognito/user-pool-id'
+    Description: "SSM Parameter name for user pool ID"
+    Value: "/protein-agent/cognito/user-pool-id"
     Export:
-      Name: !Sub '${AWS::StackName}-UserPoolIdParameter'
+      Name: !Sub "${AWS::StackName}-UserPoolIdParameter"
 
   UserPoolArnParameterName:
-    Description: 'SSM Parameter name for user pool ARN'
-    Value: '/protein-agent/cognito/user-pool-arn'
+    Description: "SSM Parameter name for user pool ARN"
+    Value: "/protein-agent/cognito/user-pool-arn"
     Export:
-      Name: !Sub '${AWS::StackName}-UserPoolArnParameter'
+      Name: !Sub "${AWS::StackName}-UserPoolArnParameter"
 
   DomainParameterName:
-    Description: 'SSM Parameter name for domain URL'
-    Value: '/protein-agent/cognito/domain'
+    Description: "SSM Parameter name for domain URL"
+    Value: "/protein-agent/cognito/domain"
     Export:
-      Name: !Sub '${AWS::StackName}-DomainParameter'
+      Name: !Sub "${AWS::StackName}-DomainParameter"
 
   # Secret Outputs
   ClientSecretName:
-    Description: 'Secrets Manager secret name containing client credentials'
-    Value: !Sub '${ProjectName}/cognito/client-secret'
+    Description: "Secrets Manager secret name containing client credentials"
+    Value: !Sub "${ProjectName}/cognito/client-secret"
     Export:
-      Name: !Sub '${AWS::StackName}-ClientSecretName'
+      Name: !Sub "${AWS::StackName}-ClientSecretName"
 
   # Resource Server Outputs
   ResourceServerIdentifier:
-    Description: 'Resource Server identifier'
+    Description: "Resource Server identifier"
     Value: !Ref ResourceServerIdentifier
     Export:
-      Name: !Sub '${AWS::StackName}-ResourceServerIdentifier'
+      Name: !Sub "${AWS::StackName}-ResourceServerIdentifier"
 
   # OAuth Scopes
   OAuthScopes:
-    Description: 'Available OAuth scopes'
-    Value: !Sub '${ResourceServerIdentifier}/read,${ResourceServerIdentifier}/write,${ResourceServerIdentifier}/admin'
+    Description: "Available OAuth scopes"
+    Value: !Sub "${ResourceServerIdentifier}/read,${ResourceServerIdentifier}/write,${ResourceServerIdentifier}/admin"
     Export:
-      Name: !Sub '${AWS::StackName}-OAuthScopes'
+      Name: !Sub "${AWS::StackName}-OAuthScopes"

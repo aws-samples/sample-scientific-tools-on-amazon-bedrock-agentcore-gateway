@@ -236,9 +236,9 @@ Resources:
                   - 'sagemaker:InvokeEndpoint'
                   - 'sagemaker:InvokeEndpointAsync'
                 Resource:
-                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:model/amplify-vep-model'
-                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint-config/amplify-vep-config'
-                  - !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/amplify-vep-endpoint'
+                  - !Sub 'arn:${AWS::Partition}:sagemaker:${AWS::Region}:${AWS::AccountId}:model/amplify-vep-model'
+                  - !Sub 'arn:${AWS::Partition}:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint-config/amplify-vep-config'
+                  - !Sub 'arn:${AWS::Partition}:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/amplify-vep-endpoint'
         - PolicyName: 'ECRContainerAccess'
           PolicyDocument:
             Version: '2012-10-17'
@@ -248,7 +248,7 @@ Resources:
                   - 'ecr:BatchCheckLayerAvailability'
                   - 'ecr:GetDownloadUrlForLayer'
                   - 'ecr:BatchGetImage'
-                Resource: !Sub 'arn:aws:ecr:${AWS::Region}:763104351884:repository/pytorch-inference'
+                Resource: !Sub 'arn:${AWS::Partition}:ecr:${AWS::Region}:763104351884:repository/pytorch-inference'
               - Effect: Allow
                 Action:
                   - 'ecr:GetAuthorizationToken'
@@ -265,8 +265,8 @@ Resources:
                   - 'logs:DescribeLogGroups'
                   - 'logs:DescribeLogStreams'
                 Resource:
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/sagemaker/Endpoints/${ProjectName}-*'
-                  - !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/sagemaker/Endpoints/${ProjectName}-*:*'
+                  - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/sagemaker/Endpoints/${ProjectName}-*'
+                  - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/sagemaker/Endpoints/${ProjectName}-*:*'
               - Effect: Allow
                 Action:
                   - 'cloudwatch:PutMetricData'
@@ -296,7 +296,7 @@ Resources:
               Service: lambda.amazonaws.com
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
       Policies:
         - PolicyName: 'SageMakerAsyncAccess'
           PolicyDocument:
@@ -306,7 +306,7 @@ Resources:
                 Action:
                   - 'sagemaker:InvokeEndpointAsync'
                   - 'sagemaker:DescribeEndpoint'
-                Resource: !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/amplify-vep-endpoint'
+                Resource: !Sub 'arn:${AWS::Partition}:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/amplify-vep-endpoint'
         - PolicyName: 'CloudWatchMetricsAccess'
           PolicyDocument:
             Version: '2012-10-17'
@@ -317,7 +317,7 @@ Resources:
                   - 'logs:CreateLogGroup'
                   - 'logs:DescribeLogStreams'
                   - 'logs:CreateLogStream'
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-*-async-endpoint-lambda'
+                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-*-async-endpoint-lambda'
               - Effect: Allow
                 Action:
                   - 'cloudwatch:PutMetricData'
@@ -410,7 +410,7 @@ Resources:
             Action:
               - 's3:ListBucket'
             Resource: !Sub 
-              - 'arn:aws:s3:::${BucketName}'
+              - 'arn:${AWS::Partition}:s3:::${BucketName}'
               - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
           - Effect: Allow
             Action:
@@ -419,23 +419,23 @@ Resources:
               - 's3:DeleteObject'
             Resource:
               - !Sub 
-                - 'arn:aws:s3:::${BucketName}/async-inference-input/*'
+                - 'arn:${AWS::Partition}:s3:::${BucketName}/async-inference-input/*'
                 - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
               - !Sub 
-                - 'arn:aws:s3:::${BucketName}/async-inference-output/*'
+                - 'arn:${AWS::Partition}:s3:::${BucketName}/async-inference-output/*'
                 - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
               - !Sub 
-                - 'arn:aws:s3:::${BucketName}/async-inference-failures/*'
+                - 'arn:${AWS::Partition}:s3:::${BucketName}/async-inference-failures/*'
                 - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
           - Effect: Allow
             Action:
               - 's3:GetObject'
             Resource:
               - !Sub 
-                - 'arn:aws:s3:::${BucketName}/model-artifacts/*'
+                - 'arn:${AWS::Partition}:s3:::${BucketName}/model-artifacts/*'
                 - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
               - !Sub 
-                - 'arn:aws:s3:::${BucketName}/inference-code/*'
+                - 'arn:${AWS::Partition}:s3:::${BucketName}/inference-code/*'
                 - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
       Roles:
         - !Ref SageMakerExecutionRole
@@ -453,23 +453,23 @@ Resources:
             Action:
               - 's3:ListBucket'
             Resource: !Sub 
-              - 'arn:aws:s3:::${BucketName}'
+              - 'arn:${AWS::Partition}:s3:::${BucketName}'
               - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
           - Effect: Allow
             Action:
               - 's3:PutObject'
             Resource: !Sub 
-              - 'arn:aws:s3:::${BucketName}/async-inference-input/*'
+              - 'arn:${AWS::Partition}:s3:::${BucketName}/async-inference-input/*'
               - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
           - Effect: Allow
             Action:
               - 's3:GetObject'
             Resource:
               - !Sub 
-                - 'arn:aws:s3:::${BucketName}/async-inference-output/*'
+                - 'arn:${AWS::Partition}:s3:::${BucketName}/async-inference-output/*'
                 - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
               - !Sub 
-                - 'arn:aws:s3:::${BucketName}/async-inference-failures/*'
+                - 'arn:${AWS::Partition}:s3:::${BucketName}/async-inference-failures/*'
                 - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
       Roles:
         - !Ref LambdaExecutionRole
@@ -644,7 +644,7 @@ Resources:
       ScalableDimension: 'sagemaker:variant:DesiredInstanceCount'
       MinCapacity: !Ref MinCapacity
       MaxCapacity: !Ref MaxCapacity
-      RoleARN: !Sub 'arn:aws:iam::${AWS::AccountId}:role/aws-service-role/sagemaker.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_SageMakerEndpoint'
+      RoleARN: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/aws-service-role/sagemaker.application-autoscaling.amazonaws.com/AWSServiceRoleForApplicationAutoScaling_SageMakerEndpoint'
 
   ScaleUpPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
@@ -779,7 +779,7 @@ Outputs:
 
   EndpointArn:
     Description: 'ARN of the created SageMaker async inference endpoint'
-    Value: !Sub 'arn:aws:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/amplify-vep-endpoint'
+    Value: !Sub 'arn:${AWS::Partition}:sagemaker:${AWS::Region}:${AWS::AccountId}:endpoint/amplify-vep-endpoint'
     Export:
       Name: !Sub '${AWS::StackName}-EndpointArn'
 
@@ -793,7 +793,7 @@ Outputs:
   BucketArn:
     Description: 'S3 bucket ARN for async inference I/O'
     Value: !Sub 
-      - 'arn:aws:s3:::${BucketName}'
+      - 'arn:${AWS::Partition}:s3:::${BucketName}'
       - BucketName: !If [CreateBucket, !Ref AsyncInferenceBucket, !Ref AsyncInferenceBucketName]
     Export:
       Name: !Sub '${AWS::StackName}-BucketArn'
