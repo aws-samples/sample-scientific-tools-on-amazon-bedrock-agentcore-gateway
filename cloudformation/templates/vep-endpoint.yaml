@@ -168,6 +168,12 @@ Parameters:
     MaxLength: 63
     # If provided, CloudFormation will use this existing bucket
     # If empty, CloudFormation will create a new bucket with auto-generated name
+  
+  ArtifactsBucketName:
+    Type: String
+    Default: ''
+    Description: 'S3 bucket containing Lambda and inference code artifacts'
+    MaxLength: 63
 
 # ============================================================================
 # CONDITIONS
@@ -592,8 +598,8 @@ Resources:
       Handler: 'lambda_function.lambda_handler'
       Role: !GetAtt LambdaExecutionRole.Arn
       Code:
-        S3Bucket: !Sub '${ProjectName}-lambda-code-${AWS::AccountId}'
-        S3Key: 'lambda_function.zip'
+        S3Bucket: !Ref ArtifactsBucketName
+        S3Key: 'lambda/lambda_function.zip'
       Timeout: 300
       MemorySize: 256
       Architectures:

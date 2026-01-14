@@ -51,7 +51,7 @@ cd cloudformation/scripts
 The deployment script will:
 
 1. Validate all CloudFormation templates
-2. Deploy the VEP Endpoint stack (SageMaker + Lambda)
+2. Deploey the VEP Endpoint stack (SageMaker + Lambda)
 3. Deploy the Cognito stack (authentication)
 4. Deploy the Gateway stack (AgentCore Gateway)
 5. Display all stack outputs including the Gateway URL
@@ -60,27 +60,29 @@ For detailed deployment instructions and configuration options, see [cloudformat
 
 ### Testing
 
+#### MCP Inspector
+
 1. **Get OAuth Token**:
 
 ```bash
-uv run get_token.py
+uv run scripts/get_token.py
 ```
 
-2. **Test with MCP Inspector**:
+2. **Launch MCP Inspector**:
 
 ```bash
 npx @modelcontextprotocol/inspector
 ```
 
-Configure the Inspector interface:
+3. Configure the Inspector interface:
 
 - Transport Type: Select Streamable HTTP
 - URL: Enter the Gateway URL from deployment outputs
 - Authentication:
   - Header name: Authorization
-  - Bearer token: The token from `get_token.py`
+  - Bearer token: The token from `scripts/get_token.py`
 
-3. **Test Protein Prediction**:
+4. . **Test Protein Prediction**:
    - Select **Connect** to establish a connection
    - Select **List Tools** to view available tools
    - Select **protein-engineering-lambda__invoke_endpoint**
@@ -89,6 +91,59 @@ Configure the Inspector interface:
    - Select **protein-engineering-lambda___get_results**
    - Enter the **output_id** and select **Run Tool**
    - Wait for prediction completion (may take several minutes for first request)
+
+#### Test with Quick Suiter
+
+Amazon Quick Suite supports MCP integrations as Actions. To add your AgentCore Gateway:
+
+1. Navigate to Quick Suite
+2. Select **Add Integration** → **Model Context Protocol**
+3. Configure the integration:
+   - **Name**: `Protein Engineering Agent`
+   - **Description**: `Variant effect prediction for protein sequences`
+   - **MCP Server Endpoint**: Enter the Gateway URL from deployment outputs (e.g., `https://protein-engineering-gateway-xxxxx.gateway.bedrock-agentcore.us-east-1.amazonaws.com/mcp`)
+
+4. Choose **Service authentication** and provide OAuth credentials:
+
+   **Obtaining the required values:**
+
+   a. **Client ID**: Retrieve from AWS Systems Manager Parameter Store:
+
+   ```bash
+   aws ssm get-parameter \
+     --name /protein-agent/cognito/client-id \
+     --region us-east-1 \
+     --query Parameter.Value \
+     --output text
+   ```
+
+   b. **Client Secret**: Retrieve from AWS Secrets Manager:
+
+   ```bash
+   aws secretsmanager get-secret-value \
+     --secret-id protein-engineering/cognito/client-secret \
+     --region us-east-1 \
+     --query SecretString \
+     --output text | jq -r .client_secret
+   ```
+
+   c. **Token URL**: Retrieve from CloudFormation stack outputs:
+
+   ```bash
+   aws cloudformation describe-stacks \
+     --stack-name protein-engineering-cognito \
+     --region us-east-1 \
+     --query 'Stacks[0].Outputs[?OutputKey==`TokenEndpoint`].OutputValue' \
+     --output text
+   ```
+
+5. Select **Save** to add the integration
+6. Test the integration by asking a Quick Suite Agent  to predict variant effects for a protein sequence
+
+**Example prompts:**
+
+- "Use the Protein Engineering Agent to predict variant effects for the sequence MKTVRQERLK"
+- "What are the predicted effects of mutations in the protein sequence FVNQHLCGSHLVEALYLVCGERGFFYTPKT?"
 
 ## Configuration
 

@@ -364,6 +364,7 @@ deploy_vep_stack() {
                 ParameterKey=MaxCapacity,ParameterValue="$MAX_CAPACITY" \
                 ParameterKey=EnableAutoScaling,ParameterValue="$ENABLE_AUTOSCALING" \
                 ParameterKey=AsyncInferenceBucketName,ParameterValue="$ARTIFACTS_BUCKET" \
+                ParameterKey=ArtifactsBucketName,ParameterValue="$ARTIFACTS_BUCKET" \
             --capabilities CAPABILITY_NAMED_IAM \
             --region "$AWS_REGION" \
             --tags \

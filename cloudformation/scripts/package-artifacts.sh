@@ -173,8 +173,8 @@ upload_artifacts() {
     print_success "Agent code uploaded to s3://${ARTIFACTS_BUCKET}/agent/agent.zip"
     
     print_info "Uploading inference code to S3..."
-    aws s3 cp "$INFERENCE_TAR" "s3://${ARTIFACTS_BUCKET}/inference/inference_code.tar.gz" --region "$AWS_REGION"
-    print_success "Inference code uploaded to s3://${ARTIFACTS_BUCKET}/inference/inference_code.tar.gz"
+    aws s3 cp "$INFERENCE_TAR" "s3://${ARTIFACTS_BUCKET}/inference-code/inference_code.tar.gz" --region "$AWS_REGION"
+    print_success "Inference code uploaded to s3://${ARTIFACTS_BUCKET}/inference-code/inference_code.tar.gz"
 }
 
 # Main execution

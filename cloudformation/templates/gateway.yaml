@@ -72,11 +72,10 @@ Parameters:
   # ----------------------------------------------------------------------------
   GatewayName:
     Type: String
-    Default: 'agentcore-gateway'
-    Description: 'Name for the AgentCore Gateway'
-    MinLength: 1
+    Default: ''
+    Description: 'Name for the AgentCore Gateway (leave empty to auto-generate from project name)'
     MaxLength: 128
-    AllowedPattern: '^[a-zA-Z0-9-_]+$'
+    AllowedPattern: '^[a-zA-Z0-9-_]*$'
     ConstraintDescription: 'Must contain only alphanumeric characters, hyphens, and underscores'
 
   GatewayDescription:
@@ -85,6 +84,12 @@ Parameters:
     Description: 'Description for the AgentCore Gateway'
     MinLength: 1
     MaxLength: 256
+
+# ============================================================================
+# CONDITIONS
+# ============================================================================
+Conditions:
+  UseGeneratedGatewayName: !Equals [!Ref GatewayName, '']
 
 # ============================================================================
 # RESOURCES
@@ -170,7 +175,7 @@ Resources:
     # Authorization: CUSTOM_JWT using Cognito for token validation
     # Dynamic References: Retrieves Cognito config from SSM at deployment time
     Properties:
-      Name: !Ref GatewayName
+      Name: !If [UseGeneratedGatewayName, !Sub '${ProjectName}-gateway', !Ref GatewayName]
       Description: !Ref GatewayDescription
       RoleArn: !GetAtt GatewayRole.Arn
       ProtocolType: MCP
@@ -305,6 +310,6 @@ Outputs:
 
   GatewayName:
     Description: 'Gateway name'
-    Value: !Ref GatewayName
+    Value: !If [UseGeneratedGatewayName, !Sub '${ProjectName}-gateway', !Ref GatewayName]
     Export:
       Name: !Sub '${AWS::StackName}-GatewayName'
