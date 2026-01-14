@@ -53,13 +53,11 @@ ENABLE_AUTOSCALING="true"
 VEP_STACK_NAME="${PROJECT_NAME}-vep-endpoint"
 COGNITO_STACK_NAME="${PROJECT_NAME}-cognito"
 GATEWAY_STACK_NAME="${PROJECT_NAME}-gateway"
-CONTAINER_STACK_NAME="${PROJECT_NAME}-container"
 
 # Template paths
 VEP_TEMPLATE="${TEMPLATES_DIR}/vep-endpoint.yaml"
 COGNITO_TEMPLATE="${TEMPLATES_DIR}/cognito.yaml"
 GATEWAY_TEMPLATE="${TEMPLATES_DIR}/gateway.yaml"
-CONTAINER_TEMPLATE="${TEMPLATES_DIR}/container.yaml"
 
 ################################################################################
 # Helper Functions
@@ -181,7 +179,6 @@ parse_arguments() {
     VEP_STACK_NAME="${PROJECT_NAME}-vep-endpoint"
     COGNITO_STACK_NAME="${PROJECT_NAME}-cognito"
     GATEWAY_STACK_NAME="${PROJECT_NAME}-gateway"
-    CONTAINER_STACK_NAME="${PROJECT_NAME}-container"
 }
 
 ################################################################################
@@ -244,7 +241,6 @@ validate_all_templates() {
     validate_template "$VEP_TEMPLATE" || validation_failed=1
     validate_template "$COGNITO_TEMPLATE" || validation_failed=1
     validate_template "$GATEWAY_TEMPLATE" || validation_failed=1
-    validate_template "$CONTAINER_TEMPLATE" || validation_failed=1
     
     if [[ $validation_failed -eq 1 ]]; then
         error_exit "Template validation failed. Please fix the errors and try again."
@@ -487,57 +483,6 @@ deploy_gateway_stack() {
     fi
 }
 
-# Deploy Container Stack
-deploy_container_stack() {
-    print_header "Deploying Container Stack"
-    
-    print_info "Stack Name: $CONTAINER_STACK_NAME"
-    print_info "Template: $CONTAINER_TEMPLATE"
-    print_info "Region: $AWS_REGION"
-    print_info "Using artifacts bucket: $ARTIFACTS_BUCKET"
-    
-    local stack_status=$(get_stack_status "$CONTAINER_STACK_NAME")
-    
-    if [[ "$stack_status" == "DOES_NOT_EXIST" ]]; then
-        print_info "Creating new stack..."
-        
-        # Generate timestamp for deployment
-        local timestamp=$(date +%s)
-        
-        aws cloudformation create-stack \
-            --stack-name "$CONTAINER_STACK_NAME" \
-            --template-body "file://$CONTAINER_TEMPLATE" \
-            --parameters \
-                ParameterKey=S3CodeBucket,ParameterValue="$ARTIFACTS_BUCKET" \
-                ParameterKey=S3CodeKey,ParameterValue="agent/agent.zip" \
-                ParameterKey=Timestamp,ParameterValue="$timestamp" \
-            --capabilities CAPABILITY_NAMED_IAM \
-            --region "$AWS_REGION" \
-            --tags \
-                Key=Project,Value="$PROJECT_NAME" \
-                Key=ManagedBy,Value=CloudFormation \
-                Key=Component,Value=Container
-        
-        wait_for_stack "$CONTAINER_STACK_NAME" "create" || error_exit "Container stack creation failed"
-    else
-        print_warning "Stack already exists with status: $stack_status"
-        print_info "Skipping Container stack deployment"
-    fi
-    
-    # Retrieve and display Container URI
-    print_info "Retrieving Container URI..."
-    local container_uri
-    if container_uri=$(aws cloudformation describe-stacks \
-        --stack-name "$CONTAINER_STACK_NAME" \
-        --query 'Stacks[0].Outputs[?OutputKey==`ContainerURI`].OutputValue' \
-        --output text \
-        --region "$AWS_REGION" 2>/dev/null); then
-        print_success "Container URI: $container_uri"
-    else
-        print_warning "Could not retrieve Container URI from stack outputs"
-    fi
-}
-
 ################################################################################
 # Output Display Functions
 ################################################################################
@@ -579,15 +524,6 @@ display_stack_outputs() {
     
     echo ""
     
-    # Container Stack Outputs
-    print_message "$GREEN" "Container Stack ($CONTAINER_STACK_NAME):"
-    aws cloudformation describe-stacks \
-        --stack-name "$CONTAINER_STACK_NAME" \
-        --query 'Stacks[0].Outputs[].[OutputKey,OutputValue]' \
-        --output table \
-        --region "$AWS_REGION" 2>/dev/null || print_warning "Could not retrieve Container stack outputs"
-    
-    echo ""
 }
 
 # Display connection information
@@ -728,7 +664,6 @@ main() {
     deploy_vep_stack
     deploy_cognito_stack
     deploy_gateway_stack
-    deploy_container_stack
     
     # Display outputs
     display_stack_outputs

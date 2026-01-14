@@ -5,10 +5,9 @@
 # 
 # This script safely deletes all CloudFormation stacks created by deploy.sh
 # in the correct reverse order:
-# 1. Container Stack
-# 2. Gateway Stack (AgentCore Gateway)
-# 3. Cognito Stack (Authentication)
-# 4. VEP Endpoint Stack (SageMaker + Lambda)
+# 1. Gateway Stack (AgentCore Gateway)
+# 2. Cognito Stack (Authentication)
+# 3. VEP Endpoint Stack (SageMaker + Lambda)
 #
 # Usage:
 #   ./destroy.sh [OPTIONS]
@@ -47,7 +46,6 @@ FORCE="false"
 VEP_STACK_NAME="${PROJECT_NAME}-vep-endpoint"
 COGNITO_STACK_NAME="${PROJECT_NAME}-cognito"
 GATEWAY_STACK_NAME="${PROJECT_NAME}-gateway"
-CONTAINER_STACK_NAME="${PROJECT_NAME}-container"
 
 ################################################################################
 # Helper Functions
@@ -157,7 +155,6 @@ parse_arguments() {
     VEP_STACK_NAME="${PROJECT_NAME}-vep-endpoint"
     COGNITO_STACK_NAME="${PROJECT_NAME}-cognito"
     GATEWAY_STACK_NAME="${PROJECT_NAME}-gateway"
-    CONTAINER_STACK_NAME="${PROJECT_NAME}-container"
 }
 
 ################################################################################
@@ -370,7 +367,7 @@ display_resources() {
     
     print_message "$YELLOW" "CloudFormation Stacks:"
     
-    for stack_name in "$CONTAINER_STACK_NAME" "$GATEWAY_STACK_NAME" "$COGNITO_STACK_NAME" "$VEP_STACK_NAME"; do
+    for stack_name in "$GATEWAY_STACK_NAME" "$COGNITO_STACK_NAME" "$VEP_STACK_NAME"; do
         if stack_exists "$stack_name"; then
             local status=$(get_stack_status "$stack_name")
             echo "  - $stack_name ($status)"
@@ -440,12 +437,6 @@ confirm_deletion() {
 # Stack Deletion Functions
 ################################################################################
 
-# Delete Container Stack
-delete_container_stack() {
-    print_header "Deleting Container Stack"
-    delete_stack "$CONTAINER_STACK_NAME"
-}
-
 # Delete Gateway Stack
 delete_gateway_stack() {
     print_header "Deleting Gateway Stack"
@@ -486,7 +477,6 @@ main() {
     confirm_deletion
     
     # Delete stacks in reverse order
-    delete_container_stack
     delete_gateway_stack
     delete_cognito_stack
     delete_vep_stack
