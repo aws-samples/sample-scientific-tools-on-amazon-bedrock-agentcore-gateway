@@ -311,22 +311,32 @@ vi cloudformation/parameters/vep-parameters.json
 
 ## Cleanup
 
-Delete all stacks in reverse order:
+Use the `destroy.sh` script to safely delete all deployed resources:
 
 ```bash
-# Delete Gateway stack
-aws cloudformation delete-stack --stack-name protein-engineering-gateway
+# Delete all stacks with confirmation prompts
+./scripts/destroy.sh
 
-# Delete Cognito stack
-aws cloudformation delete-stack --stack-name protein-engineering-cognito
+# Delete stacks in a specific region
+./scripts/destroy.sh --region us-west-2
 
-# Delete VEP stack
-aws cloudformation delete-stack --stack-name protein-engineering-vep
+# Delete stacks for a custom project name
+./scripts/destroy.sh --project-name my-project --region us-east-1
 
-# Note: S3 bucket is retained by default to prevent data loss
-# Manually delete if needed:
-aws s3 rb s3://your-bucket-name --force
+# Delete stacks AND S3 buckets (WARNING: permanently destroys all data)
+./scripts/destroy.sh --delete-buckets
+
+# Skip confirmation prompts (useful for CI/CD)
+./scripts/destroy.sh --force
 ```
+
+The script handles:
+- Deleting stacks in the correct reverse dependency order
+- Waiting for each stack deletion to complete before proceeding
+- Optional S3 bucket cleanup with data deletion confirmation
+- Validation of AWS credentials before starting
+
+> **Note**: S3 buckets are retained by default to prevent accidental data loss. Use `--delete-buckets` only when you're certain you no longer need the data.
 
 For detailed cleanup instructions, see [cloudformation/README.md](cloudformation/README.md).
 
