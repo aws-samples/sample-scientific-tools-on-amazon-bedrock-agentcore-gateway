@@ -247,6 +247,10 @@ aws cloudformation describe-stacks \
 
 ## Cost Optimization
 
+### Cost Analysis
+
+The ability to autoscale SageMaker endpoints to zero is a powerful way to optimize costs for workloads with sporadic or “spiky” use. For example, let’s assume that our SageMaker endpoint receives 1,000 request per month, each of which takes 5 minutes to process. The current (as of 8/29/2025) hourly rate for a ml.g6.2xlarge in us-east-1 is $1.222. The cost to run a real-time inference endpoint for 30 days at that rate would be $879.84. However, if you use an asynchronous endpoint and scale it to zero after a 5-minute cool-down (10-minute total processing time per request), the total cost is approximately $203.67, for savings of 76%. This represents substantial savings for enterprise teams hosting dozens or more scientific tools.
+
 ### Auto-scaling Best Practices
 
 1. **Scale to Zero**: Set `MinCapacity=0` to avoid idle costs
